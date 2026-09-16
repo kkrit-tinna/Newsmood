@@ -1,0 +1,6 @@
+# newsmood — default configuration
+# Thresholds, feed URLs, model revision and band cutoffs live here.
+# Never hardcode one of these in a module.
+
+dataset:
+  # populated by T1.2
