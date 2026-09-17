@@ -24,6 +24,16 @@ from newsmood.config import Settings, get_settings
 
 LABEL_NAMES = ["negative", "neutral", "positive"]
 
+_ZIP_PATH_IN_REPO = "data/FinancialPhraseBank-v1.0.zip"
+
+# Pinned against the zip fetched 2026-09-17. Mirrors the model-revision
+# pinning pattern in CLAUDE.md — the raw file isn't versioned upstream
+# (no Parquet conversion, no release tags), so this is the only thing
+# stopping an upstream content change from silently reaching the parser.
+# Re-pin deliberately (after diffing old vs. new content) if this legitimately
+# needs to change; don't just update it to make a failure go away.
+_ZIP_SHA256 = "0e1a06c4900fdae46091d031068601e3773ba067c7cecb5b0da1dcba5ce989a6"
+
 _AGREE_TO_FILENAME = {
     "sentences_allagree": "Sentences_AllAgree.txt",
     "sentences_75agree": "Sentences_75Agree.txt",
@@ -32,20 +42,46 @@ _AGREE_TO_FILENAME = {
 }
 
 
+class PhraseBankSourceChanged(RuntimeError):
+    """The downloaded PhraseBank zip no longer matches what this module was written against."""
+
+
 def _raw_lines(repo_id: str, config_name: str) -> list[str]:
-    zip_path = hf_hub_download(repo_id, "data/FinancialPhraseBank-v1.0.zip", repo_type="dataset")
+    zip_path = hf_hub_download(repo_id, _ZIP_PATH_IN_REPO, repo_type="dataset")
+
+    actual_sha256 = hashlib.sha256(Path(zip_path).read_bytes()).hexdigest()
+    if actual_sha256 != _ZIP_SHA256:
+        raise PhraseBankSourceChanged(
+            f"{repo_id}/{_ZIP_PATH_IN_REPO} sha256 is {actual_sha256}, expected {_ZIP_SHA256}. "
+            "The upstream file has changed since this loader was written against it — "
+            "verify the new content by hand (row counts, file names, line format) before "
+            "re-pinning _ZIP_SHA256, rather than just updating the constant."
+        )
+
     filename = _AGREE_TO_FILENAME[config_name]
+    member = f"FinancialPhraseBank-v1.0/{filename}"
     with zipfile.ZipFile(zip_path) as z:
-        raw = z.read(f"FinancialPhraseBank-v1.0/{filename}").decode("iso-8859-1")
+        try:
+            raw = z.read(member).decode("iso-8859-1")
+        except KeyError:
+            raise PhraseBankSourceChanged(
+                f"{member} not found in {_ZIP_PATH_IN_REPO} (checksum matched, so this "
+                "shouldn't happen — the zip layout assumed by _AGREE_TO_FILENAME may be stale)."
+            ) from None
     return raw.splitlines()
 
 
 def load_config(repo_id: str, config_name: str) -> Dataset:
     """Load one agreement config as a Dataset with ClassLabel `label`."""
     sentences, labels = [], []
-    for line in _raw_lines(repo_id, config_name):
+    for lineno, line in enumerate(_raw_lines(repo_id, config_name), start=1):
         if not line.strip():
             continue
+        if "@" not in line:
+            raise PhraseBankSourceChanged(
+                f"{config_name} line {lineno} has no '@' separator: {line[:80]!r}. "
+                "Expected 'sentence@label' — the source line format may have changed."
+            )
         sentence, label = line.rsplit("@", 1)
         sentences.append(sentence.strip())
         labels.append(label.strip())

@@ -7,7 +7,9 @@ from datasets import Dataset
 from newsmood.data.phrasebank import (
     LABEL_NAMES,
     NestingResult,
+    PhraseBankSourceChanged,
     label_distribution,
+    load_config,
     load_splits,
     make_splits,
     nesting_report,
@@ -164,6 +166,27 @@ def test_splits_meta_records_pinning_fields(tmp_path):
         "test_sentence_sha256",
     ):
         assert key in meta
+
+
+# --- source-change detection: clear errors, not confusing parse failures ---
+
+
+def test_raw_lines_raises_on_checksum_mismatch(tmp_path, monkeypatch):
+    fake_zip = tmp_path / "fake.zip"
+    fake_zip.write_bytes(b"not the real phrasebank zip")
+    monkeypatch.setattr("newsmood.data.phrasebank.hf_hub_download", lambda *a, **k: str(fake_zip))
+
+    with pytest.raises(PhraseBankSourceChanged, match="sha256"):
+        load_config("takala/financial_phrasebank", "sentences_75agree")
+
+
+def test_load_config_raises_on_missing_separator(monkeypatch):
+    monkeypatch.setattr(
+        "newsmood.data.phrasebank._raw_lines",
+        lambda repo_id, config_name: ["a valid line@neutral", "a line with no separator"],
+    )
+    with pytest.raises(PhraseBankSourceChanged, match="no '@' separator"):
+        load_config("fake-repo", "sentences_75agree")
 
 
 # --- nesting_report: set containment, not just counts ---

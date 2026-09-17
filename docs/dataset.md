@@ -5,6 +5,15 @@ on the Hugging Face Hub. See CLAUDE.md and IMPLEMENTATION_GUIDE.md §9 for why
 this is loaded by downloading `FinancialPhraseBank-v1.0.zip` directly rather
 than via `datasets.load_dataset(...)`.
 
+The raw file isn't versioned upstream — no release tags, no Parquet
+conversion, and the loading script itself just points at `main`. So
+`data/phrasebank.py` pins the zip's SHA-256 (mirroring the model-revision
+pinning pattern for DistilBERT). Before parsing, it verifies the download
+against that pin and raises `PhraseBankSourceChanged` — not a `KeyError` or
+a confusing unpack error — if the file, an expected member inside it, or a
+line's `sentence@label` format ever stops matching what this module was
+written against.
+
 ## Config nesting
 
 The dataset ships four configs by annotator agreement, and they are nested
