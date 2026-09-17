@@ -3,4 +3,20 @@
 # Never hardcode one of these in a module.
 
 dataset:
-  # populated by T1.2
+  # Financial PhraseBank. See CLAUDE.md — never train or evaluate on
+  # a different agreement config than phrasebank_config.
+  repo_id: takala/financial_phrasebank
+  phrasebank_config: sentences_75agree
+  agreement_configs:
+    - sentences_allagree
+    - sentences_75agree
+    - sentences_66agree
+    - sentences_50agree
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  seed: 42
+  tokenizer: distilbert-base-uncased
+  splits_dir: data/splits
+  sample_size: 200
+  sample_path: data/sample/headlines_200.jsonl

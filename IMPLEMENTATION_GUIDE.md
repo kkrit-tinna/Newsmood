@@ -285,7 +285,11 @@ Then the layout in §3 with empty modules, a `pyproject.toml` with the `newsmood
 **Depends on:** T1.1
 **Commit:** `feat: phrasebank-dataset-setup`
 
-`data/phrasebank.py` loads `takala/financial_phrasebank` from the Hugging Face Hub.
+`data/phrasebank.py` loads `takala/financial_phrasebank` from the Hugging Face
+Hub. ⚠️ Not via `datasets.load_dataset(...)` — that repo only ships a legacy
+loading script, and `datasets>=4.0` dropped script-based loading. Download
+`FinancialPhraseBank-v1.0.zip` directly and parse it (`iso-8859-1`, split on
+the last `@`), same as the script did. See §9 Deviations, 2026-09-17.
 
 ⚠️ **Methodological constraint that propagates through the entire project.** The dataset ships four configs by annotator agreement, and **they are nested supersets**:
 
@@ -372,7 +376,9 @@ Write the analysis paragraph in `docs/baselines.md`: why VADER fails on financia
 **Depends on:** T1.5
 **Commit:** `feat: distilbert-framework-setup`
 
-`training/dataset.py` — port `SentimentDataset`, `max_length` from T1.2's p95 (start at 192).
+`training/dataset.py` — port `SentimentDataset`, `max_length` from T1.2's
+measured p95: **58** (mean 30.4, max 150 — see `docs/dataset.md`). Placeholder
+of 192 superseded, §9 Deviations 2026-09-17.
 
 `training/finetune.py` — port `get_device()` and `EarlyStopping`. Use:
 
@@ -789,3 +795,6 @@ Append whenever reality differs. Date, task ID, what changed, why.
 |---|---|---|---|
 | 2026-09-16 | T1.1 | `.gitignore` line 3 changed from `data/` to `data/*` | Git cannot re-include a path (`!data/sample/`) inside a directory that is itself excluded — it never descends into `data/` to check per-file rules. The literal spec pattern silently ignored `data/sample/` too, which would have blocked committing `data/sample/headlines_200.jsonl` in T1.2. |
 | 2026-09-16 | T1.1 | `.gitignore` `models/` line changed to `/models/` | Unanchored `models/` matches any directory named `models` at any depth, including `src/newsmood/models/` (real source code per §3). It silently ignored the whole models sub-package. Anchoring to repo root limits it to the checkpoint directory it was meant to exclude. |
+| 2026-09-17 | T1.2 | `data/phrasebank.py` loads PhraseBank by downloading `FinancialPhraseBank-v1.0.zip` directly and parsing it, not via `datasets.load_dataset("takala/financial_phrasebank", ...)` | The HF repo only ships a legacy loading script (no Parquet conversion); `datasets>=4.0` (installed: 5.0.1) dropped script-based loading entirely (`RuntimeError: Dataset scripts are no longer supported`). The replacement parses the same zip with the script's own logic (`iso-8859-1`, split on last `@`) — same data, same four configs, not a new source. |
+| 2026-09-17 | T1.2 | `max_length` guidance for T2.1 revised from the 192 placeholder to the measured p95 (58) | Real token-length distribution under `distilbert-base-uncased`: mean 30.4, p95 58, max 150 (see `docs/dataset.md`). 192 would pad most batches to 3x+ the length actually needed. |
+| 2026-09-17 | T1.2 | Added `[project.optional-dependencies] dev = ["pytest"]` to `pyproject.toml` | T1.1's skeleton never declared `pytest` anywhere, but every task's Done-when bar from here on runs `pytest`. Left undeclared, `pytest tests/` only worked by accident of whatever happened to be on the machine already. |

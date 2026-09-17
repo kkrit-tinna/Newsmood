@@ -72,11 +72,16 @@ GitHub Actions (weekdays 22:00 UTC)
 
 ## Where I am right now
 
-*Last updated: Wednesday, Sep 16, 2026*
+*Last updated: Thursday, Sep 17, 2026*
 
-**Status:** T1.1 complete — package skeleton committed (`feat: package-skeleton`). `pip install -e .` works, `newsmood --help` lists all five subcommands.
+**Status:** T1.2 complete — dataset and splits (`feat: phrasebank-dataset-setup`). `data/phrasebank.py` loads PhraseBank, verifies the four-config nesting by set containment (holds, no violations), builds a stratified 70/15/15 split of `sentences_75agree` (seed 42, stratified on both peels), and pins it with `data/splits/splits_meta.json` (config, ratios, seed, row counts, `datasets` version, SHA-256 of the test-set sentences) so a later library bump can't silently regenerate a different split under the same seed. `load_splits()` fails loudly if splits are missing; `verify_splits()` re-hashes and raises on drift. `docs/dataset.md` has the real numbers: majority-class baseline 62.1% (neutral), token length under `distilbert-base-uncased` mean 30.4 / p95 58 / max 150. `data/sample/headlines_200.jsonl` committed for `make demo`. 10 tests in `tests/test_phrasebank.py`, all against in-memory fixtures — no network in the test suite.
 
-**Schedule:** on track, nothing built yet. `IMPLEMENTATION_GUIDE.md` §6 T3.6 (Reddit) is the first thing to drop if I fall behind; T3.4 (drift analysis) is the last, because it is the most valuable task in the project.
+**Real deviations from the guide, logged in §9 and in the same commit:**
+- `datasets.load_dataset("takala/financial_phrasebank", ...)` no longer works — `datasets>=4.0` dropped script-based loading and this repo never got a Parquet conversion. Fixed by downloading `FinancialPhraseBank-v1.0.zip` directly and parsing it with the original script's own logic. Same data, not a new source.
+- T2.1's `max_length` placeholder (192) is superseded by the measured p95 (58) — worth remembering when T2.1 starts, 192 would pad most batches 3x+ more than needed.
+- `pyproject.toml` never declared `pytest` anywhere despite every task's Done-when running it. Added a `dev = ["pytest"]` extra.
+
+**Schedule:** on track. `IMPLEMENTATION_GUIDE.md` §6 T3.6 (Reddit) is the first thing to drop if I fall behind; T3.4 (drift analysis) is the last, because it is the most valuable task in the project.
 
 **Ready:**
 - [x] GitHub repo `newsmood` created, public
@@ -91,7 +96,7 @@ GitHub Actions (weekdays 22:00 UTC)
 - conda `base` auto-activates in every shell. The guide assumes plain `python3 -m venv`.
 - Apple Silicon: `get_device()` returns `mps`. MPS is occasionally slower than CPU for small batches — if fine-tuning looks stuck, try `--device cpu` before debugging anything else.
 
-**Next task:** T1.2 — dataset and splits. Full calendar in `IMPLEMENTATION_GUIDE.md` §0.5.
+**Next task:** T1.3 — VADER baseline. Full calendar in `IMPLEMENTATION_GUIDE.md` §0.5.
 
 **No sessions Sunday Sep 20 or Sunday Oct 4.** Three Sundays are load-bearing and cannot move to a weekday: **Sep 27** (T2.1+T2.2+T2.3, the fine-tune), **Oct 11** (T3.4, hand-labeling in one sitting), **Oct 18** (T4.4 Actions + release). Full calendar in `IMPLEMENTATION_GUIDE.md` §0.5.
 
