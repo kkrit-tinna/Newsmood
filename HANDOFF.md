@@ -78,7 +78,7 @@ GitHub Actions (weekdays 22:00 UTC)
 
 **Real deviations from the guide, logged in §9 and in the same commit:**
 - `datasets.load_dataset("takala/financial_phrasebank", ...)` no longer works — `datasets>=4.0` dropped script-based loading and this repo never got a Parquet conversion. Fixed by downloading `FinancialPhraseBank-v1.0.zip` directly and parsing it with the original script's own logic. Same data, not a new source.
-- T2.1's `max_length` placeholder (192) is superseded by the measured p95 (58) — worth remembering when T2.1 starts, 192 would pad most batches 3x+ more than needed.
+- T2.1's `max_length` placeholder (192) is superseded by the measured p95 (58) — worth remembering when T2.1 starts, 192 would pad most batches 3x+ more than needed. **But T2.1 must measure p99 before picking a final value** — p95=58 while max=150, so 64 would truncate the long tail. Decide between 96 and 128 based on the real p99.
 - `pyproject.toml` never declared `pytest` anywhere despite every task's Done-when running it. Added a `dev = ["pytest"]` extra.
 
 **Schedule:** on track. `IMPLEMENTATION_GUIDE.md` §6 T3.6 (Reddit) is the first thing to drop if I fall behind; T3.4 (drift analysis) is the last, because it is the most valuable task in the project.
