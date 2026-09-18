@@ -43,10 +43,11 @@ class YamlConfigSource(PydanticBaseSettingsSource):
 
 
 class Settings(BaseSettings):
-    """Precedence env > explicit constructor kwargs > config/default.yaml > code default, per CLAUDE.md.
+    """Precedence explicit kwargs > env > config/default.yaml > code default, per CLAUDE.md.
 
-    Explicit kwargs (`Settings(dataset=...)`) rank above the yaml file so that
-    tests can override a yaml-covered field without touching config/default.yaml.
+    Explicit kwargs (`Settings(dataset=...)`) outrank everything so tests can
+    override a yaml- or env-covered field deterministically, regardless of
+    whatever env vars happen to be set in the process running the test.
     """
 
     model_config = SettingsConfigDict(env_prefix="NEWSMOOD_", env_nested_delimiter="__")
@@ -64,14 +65,14 @@ class Settings(BaseSettings):
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         # pydantic-settings ranks sources by position: earlier wins. Explicit
-        # constructor kwargs (init_settings) must outrank the yaml file, or
-        # any Settings(dataset=...) built by a test — e.g. to point
-        # splits_dir at a tmp dir — is silently overridden by the real
-        # config/default.yaml value for that field. See IMPLEMENTATION_GUIDE.md
-        # §9 Deviations, 2026-09-18.
+        # constructor kwargs (init_settings) must outrank env too, or a
+        # Settings(dataset=...) built by a test — e.g. to point splits_dir at
+        # a tmp dir — is at the mercy of whatever NEWSMOOD_ env vars happen
+        # to be set in the process running the test. See
+        # IMPLEMENTATION_GUIDE.md §9 Deviations, 2026-09-18/19.
         return (
-            env_settings,
             init_settings,
+            env_settings,
             YamlConfigSource(settings_cls, DEFAULT_CONFIG_PATH),
             dotenv_settings,
             file_secret_settings,
