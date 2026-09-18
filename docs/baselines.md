@@ -16,10 +16,19 @@ newsmood eval --model vader
 |---|---|
 | Accuracy | **54.05%** |
 | Macro-F1 | 45.83% |
+| Weighted-F1 | 55.29% |
 
 **Below the majority-class floor.** Always predicting "neutral" clears 62.1%
 (`docs/dataset.md`) for free; VADER's lexicon-and-thresholds approach gets
 54.05% — worse than guessing the most common label every time.
+
+Per-class recall:
+
+| Class | Recall |
+|---|---|
+| negative | 22.22% |
+| neutral | 54.97% |
+| positive | 66.92% |
 
 Confusion matrix (rows = true, cols = predicted):
 
@@ -29,8 +38,8 @@ Confusion matrix (rows = true, cols = predicted):
 | **true: neutral** | 19 | 177 | 126 |
 | **true: positive** | 11 | 33 | 89 |
 
-Negative headlines are the biggest casualty: only 14/63 (22%) correctly
-labeled negative, with 32 misread as positive.
+Negative headlines are the biggest casualty: only 22.22% recall, with 32 of
+63 misread as positive.
 
 ### Why it fails
 

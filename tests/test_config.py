@@ -3,7 +3,7 @@
 Settings.settings_customise_sources ranks sources by position (earlier
 wins) — this asserts that ordering directly, rather than relying on some
 later task's settings-driven path resolution to notice a regression by
-accident. See IMPLEMENTATION_GUIDE.md §9 Deviations, 2026-09-18/19.
+accident. See IMPLEMENTATION_GUIDE.md §9 Deviations, 2026-09-18.
 """
 
 from __future__ import annotations

@@ -69,7 +69,7 @@ class Settings(BaseSettings):
         # Settings(dataset=...) built by a test — e.g. to point splits_dir at
         # a tmp dir — is at the mercy of whatever NEWSMOOD_ env vars happen
         # to be set in the process running the test. See
-        # IMPLEMENTATION_GUIDE.md §9 Deviations, 2026-09-18/19.
+        # IMPLEMENTATION_GUIDE.md §9 Deviations, 2026-09-18.
         return (
             init_settings,
             env_settings,
