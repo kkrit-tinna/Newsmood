@@ -12,6 +12,7 @@ dependencies = [
     "feedparser",
     "pydantic-settings",
     "pyyaml",
+    "vaderSentiment",
 ]
 
 [project.optional-dependencies]

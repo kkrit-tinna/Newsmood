@@ -20,3 +20,11 @@ dataset:
   splits_dir: data/splits
   sample_size: 200
   sample_path: data/sample/headlines_200.jsonl
+
+vader:
+  # Compound-score thresholds, ported as-is from the archived repo.
+  # compound >= positive_threshold -> positive
+  # compound <= negative_threshold -> negative
+  # else -> neutral
+  positive_threshold: 0.05
+  negative_threshold: -0.05

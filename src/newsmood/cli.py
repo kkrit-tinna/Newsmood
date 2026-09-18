@@ -1,5 +1,10 @@
 import typer
 
+from newsmood.baselines import vader
+from newsmood.config import get_settings
+from newsmood.data.phrasebank import LABEL_NAMES
+from newsmood.evaluation.metrics import evaluate, format_eval_result
+
 app = typer.Typer()
 
 
@@ -28,9 +33,17 @@ def train():
 
 
 @app.command(name="eval")
-def eval_():
+def eval_(model: str = typer.Option(..., "--model", help="Baseline or model to evaluate, e.g. 'vader'.")):
     """Evaluate a model or baseline against the test split."""
-    print("not implemented")
+    settings = get_settings()
+
+    if model == "vader":
+        _, y_true, y_pred = vader.predict_test_split(settings)
+    else:
+        raise typer.BadParameter(f"unknown model {model!r}, expected one of: vader")
+
+    result = evaluate(y_true, y_pred, LABEL_NAMES)
+    print(format_eval_result(model, result))
 
 
 if __name__ == "__main__":
