@@ -48,7 +48,7 @@ def eval_(
 
     if all_:
         table = run_reference_and_baselines(settings)
-        update_baselines_doc(BASELINES_DOC_PATH, table, HUMAN_CEILING_NOTE)
+        update_baselines_doc(BASELINES_DOC_PATH, table, HUMAN_CEILING_NOTE, settings.dataset.seed)
         print(f"wrote {BASELINES_DOC_PATH} ({len(table)} methods)")
         return
 

@@ -1,6 +1,8 @@
 # Baselines
 
 <!-- eval:summary:start -->
+All rows below are measured on the pinned test split (n=518).
+
 | Method | Accuracy | Macro-F1 | Weighted-F1 | Recall (negative / neutral / positive) |
 |---|---|---|---|---|
 | Majority class | 62.16% | 25.56% | 47.66% | 0.00% / 100.00% / 0.00% |
@@ -8,6 +10,8 @@
 | VADER | 54.05% | 45.83% | 55.29% | 22.22% / 54.97% / 66.92% |
 | Logistic Regression | 83.59% | 79.97% | 83.44% | 77.78% / 90.06% / 70.68% |
 | Human ceiling | — | — | — | Not a number to compare against directly: `sentences_75agree` keeps only rows where at least 75% of annotators agreed, so up to 25% of annotators disagreed with the kept label on every one of them. A model scoring in the high-80s/low-90s may be brushing a ceiling inherent to the labels, not still leaving headroom on the table. |
+
+"Stratified random" is a single seeded draw from the training label distribution (`dataset.seed=42`), not an average over repeats — rerun with the same seed to reproduce it exactly.
 <!-- eval:summary:end -->
 
 ## VADER
@@ -28,9 +32,13 @@ newsmood eval --model vader
 | Macro-F1 | 45.83% |
 | Weighted-F1 | 55.29% |
 
-**Below the majority-class floor.** Always predicting "neutral" clears 62.1%
-(`docs/dataset.md`) for free; VADER's lexicon-and-thresholds approach gets
-54.05% — worse than guessing the most common label every time.
+**Below the majority-class floor.** Always predicting "neutral" clears
+62.16% on this same test split (Majority class row, table above) for free;
+VADER's lexicon-and-thresholds approach gets 54.05% — worse than guessing
+the most common label every time. (`docs/dataset.md`'s 62.1% is the same
+share measured over the full 3,453-row corpus rather than the 518-row test
+split — close, not identical, because the split isn't exactly proportional
+at that rounding.)
 
 Per-class recall:
 

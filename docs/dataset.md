@@ -49,10 +49,13 @@ never cross-evaluate (see CLAUDE.md hard constraints).
 | positive | 887 | 25.7% |
 | negative | 420 | 12.2% |
 
-**Majority-class baseline: 62.1%** (neutral). This is the number every later
-accuracy claim in this project is measured against — a classifier that
-always predicts "neutral" clears 62.1% for free. Close to the guide's
-estimate of "roughly 60%," recorded here as the real, measured figure.
+**Majority class: neutral, 62.1% of the full corpus.** Close to the guide's
+estimate of "roughly 60%." This is a corpus-level share, not the operational
+floor — the majority-class baseline every later accuracy claim is actually
+measured against is the 518-row **test split**, where it comes out to
+**62.16%** (see `docs/baselines.md`, measured by `newsmood eval --all`).
+The two are close but not identical because the split isn't exactly
+proportional to the full corpus at this rounding.
 
 ## Split
 

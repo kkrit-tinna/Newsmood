@@ -27,10 +27,11 @@ _TABLE = {
 }
 
 _HUMAN_CEILING_NOTE = "25% of annotators disagreed; treat high scores as brushing a floor, not a target."
+_SEED = 42
 
 
 def test_render_summary_table_has_one_row_per_method_plus_human_ceiling():
-    text = render_summary_table(_TABLE, _HUMAN_CEILING_NOTE)
+    text = render_summary_table(_TABLE, _HUMAN_CEILING_NOTE, _SEED)
     assert "Majority class" in text
     assert "VADER" in text
     assert "Human ceiling" in text
@@ -38,7 +39,7 @@ def test_render_summary_table_has_one_row_per_method_plus_human_ceiling():
 
 
 def test_render_summary_table_reports_accuracy_macro_f1_weighted_f1_and_recall():
-    text = render_summary_table(_TABLE, _HUMAN_CEILING_NOTE)
+    text = render_summary_table(_TABLE, _HUMAN_CEILING_NOTE, _SEED)
     assert "54.05%" in text  # vader accuracy
     assert "45.83%" in text  # vader macro-F1
     assert "55.29%" in text  # vader weighted-F1
@@ -46,14 +47,26 @@ def test_render_summary_table_reports_accuracy_macro_f1_weighted_f1_and_recall()
 
 
 def test_render_summary_table_is_wrapped_in_markers():
-    text = render_summary_table(_TABLE, _HUMAN_CEILING_NOTE)
+    text = render_summary_table(_TABLE, _HUMAN_CEILING_NOTE, _SEED)
     assert text.startswith(_START_MARKER)
     assert text.endswith(_END_MARKER)
 
 
+def test_render_summary_table_names_the_test_split_population():
+    text = render_summary_table(_TABLE, _HUMAN_CEILING_NOTE, _SEED)
+    # confusion matrices in _TABLE sum to 518 (63 + 322 + 133)
+    assert "n=518" in text
+
+
+def test_render_summary_table_discloses_stratified_random_is_a_single_seeded_draw():
+    text = render_summary_table(_TABLE, _HUMAN_CEILING_NOTE, seed=42)
+    assert "single seeded draw" in text
+    assert "dataset.seed=42" in text
+
+
 def test_update_baselines_doc_creates_file_when_missing(tmp_path):
     path = tmp_path / "baselines.md"
-    update_baselines_doc(path, _TABLE, _HUMAN_CEILING_NOTE)
+    update_baselines_doc(path, _TABLE, _HUMAN_CEILING_NOTE, _SEED)
     content = path.read_text()
     assert content.startswith("# Baselines")
     assert "VADER" in content
@@ -66,7 +79,7 @@ def test_update_baselines_doc_preserves_hand_written_prose_below_the_table(tmp_p
         "# Baselines\n\n## VADER\n\nSome hand-written failure-mode analysis that must survive.\n"
     )
 
-    update_baselines_doc(path, _TABLE, _HUMAN_CEILING_NOTE)
+    update_baselines_doc(path, _TABLE, _HUMAN_CEILING_NOTE, _SEED)
 
     content = path.read_text()
     assert "Some hand-written failure-mode analysis that must survive." in content
@@ -77,9 +90,9 @@ def test_update_baselines_doc_is_idempotent_on_rerun(tmp_path):
     path = tmp_path / "baselines.md"
     path.write_text("# Baselines\n\n## VADER\n\nHand-written analysis.\n")
 
-    update_baselines_doc(path, _TABLE, _HUMAN_CEILING_NOTE)
+    update_baselines_doc(path, _TABLE, _HUMAN_CEILING_NOTE, _SEED)
     first = path.read_text()
-    update_baselines_doc(path, _TABLE, _HUMAN_CEILING_NOTE)
+    update_baselines_doc(path, _TABLE, _HUMAN_CEILING_NOTE, _SEED)
     second = path.read_text()
 
     assert first == second

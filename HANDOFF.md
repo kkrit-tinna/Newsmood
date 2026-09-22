@@ -80,19 +80,18 @@ GitHub Actions (weekdays 22:00 UTC)
 |---|---|
 | Training config | `sentences_75agree`, 3,453 rows |
 | Split | 70/15/15 stratified, seed 42 → 518-row test set, SHA-256 pinned in `splits_meta.json` |
-| Majority-class floor | **62.1%** (neutral) — report every accuracy next to this |
 | Negative share | 12.2% |
 | Token length | mean 30.4 · p95 58 · max 150 |
-| Majority class | 62.16% acc · 25.56% macro-F1 · 0.00% negative recall |
-| Stratified random | 44.02% acc · 30.54% macro-F1 · 11.11% negative recall |
+| Majority class (floor) | 62.16% acc · 25.56% macro-F1 · 0.00% negative recall — test split, n=518. (62.1% elsewhere is the same share over the full 3,453-row corpus, not this baseline — see `docs/dataset.md`.) |
+| Stratified random | 44.02% acc · 30.54% macro-F1 · 11.11% negative recall — single seeded draw, `dataset.seed=42`, not averaged over repeats |
 | VADER baseline | 54.05% acc · 45.83% macro-F1 · 22.22% negative recall |
 | LogReg baseline | 83.59% acc · 79.97% macro-F1 · 83.44% weighted-F1 · 77.78% negative recall |
 | Human ceiling | qualitative only — up to 25% of annotators disagreed on every kept `75agree` row, no number fabricated |
 
 **Carry forward**
-- **Fitted vectorizer** lives at `models/baselines/` (`tfidf_vectorizer.joblib`, `logreg_classifier.joblib` — gitignored via the root-anchored `/models/`). `meta.json` alongside them records `sklearn_version` (1.9.1), `train_row_count` (2417), and `test_sentence_sha256`, matching the hash in `data/splits/splits_meta.json`. `reporting/explain.py` loads this same vectorizer in T4.2b via `baselines.logreg.load_vectorizer()` instead of fitting a second one.
-- **T4.2b/T4.4** — `/models/` is gitignored, so the Actions runner won't have the vectorizer. Decide on Oct 5: refit in CI from the pinned split, commit the joblib file, or publish to the Hub.
+- **T4.2b/T4.4** — `/models/` is gitignored, so the Actions runner won't have the fitted TF-IDF vectorizer (`models/baselines/`, persisted by `baselines/logreg.py`). Decide on Oct 5: refit in CI from the pinned split, commit the joblib file, or publish to the Hub.
 - **T1.5 output** — `evaluation.metrics.calculate_comprehensive_metrics(method, y_true, y_pred, labels)` returns a plain dict keyed by method name; `evaluation/suite.py`'s `run_reference_and_baselines()` merges majority-class/stratified-random/VADER/LogReg into one table; `newsmood eval --all` writes it into `docs/baselines.md` between `<!-- eval:summary:start/end -->` markers, leaving hand-written prose below untouched. T2.3 adds `distilbert`/`finbert` rows to the same table shape; T3.5's gates read from it.
+- **`perform_cross_validation()` is still unported.** §3's reuse table maps it to `evaluation/metrics.py` ("Baselines only"), but neither T1.4 nor T1.5's Done-when required it, so it never landed. No later task in the guide claims it either. T1.6 (baseline analysis writeup, still in the baseline-evaluation phase) is the most natural place to absorb it, but its current guide description doesn't mention it — update `IMPLEMENTATION_GUIDE.md` T1.6 in the same commit if it's picked up there.
 - **T2.1** — measure p99 token length before setting `max_length`. Choose 96 or 128. Not 64: it truncates the long tail, and financial sentences often carry their sentiment in the final clause.
 
 **Deviations so far** — full entries in `IMPLEMENTATION_GUIDE.md` §9
