@@ -27,6 +27,16 @@ class VaderSettings(BaseModel):
     negative_threshold: float
 
 
+class LogregSettings(BaseModel):
+    ngram_range: tuple[int, int]
+    min_df: int
+    max_df: float
+    max_features: int
+    class_weight: str
+    max_iter: int
+    artifact_dir: str
+
+
 class YamlConfigSource(PydanticBaseSettingsSource):
     """Reads config/default.yaml as a settings layer, below env vars."""
 
@@ -54,6 +64,7 @@ class Settings(BaseSettings):
 
     dataset: DatasetSettings
     vader: VaderSettings
+    logreg: LogregSettings
 
     @classmethod
     def settings_customise_sources(

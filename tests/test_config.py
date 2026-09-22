@@ -60,6 +60,15 @@ def _write_yaml_config(path: Path) -> None:
                     "sample_path": "yaml-sample",
                 },
                 "vader": {"positive_threshold": 0.22, "negative_threshold": -0.22},
+                "logreg": {
+                    "ngram_range": [1, 3],
+                    "min_df": 2,
+                    "max_df": 0.95,
+                    "max_features": 20000,
+                    "class_weight": "balanced",
+                    "max_iter": 1000,
+                    "artifact_dir": "yaml-artifact-dir",
+                },
             }
         )
     )
