@@ -1,11 +1,11 @@
 """Classification metrics: accuracy, macro-F1, weighted-F1, per-class recall,
 confusion matrix.
 
-This is what T1.3's baseline eval needs. T1.5 extends it with the
-majority-class / stratified-random floor rows and assembles the
-one-row-per-method table (`newsmood eval --all`) out of `EvalResult` —
-see IMPLEMENTATION_GUIDE.md T1.5. `per_class_stats` is the shared core so
-that extension adds rows/callers rather than rewriting the arithmetic.
+`per_class_stats` is the shared core; `evaluate` bundles it into an
+`EvalResult`, and `calculate_comprehensive_metrics` is the plain-dict,
+method-keyed form of the same numbers that `newsmood eval --all`
+(IMPLEMENTATION_GUIDE.md T1.5) assembles into one table — no formatting
+lives here, see `evaluation/baselines_doc.py`.
 """
 
 from __future__ import annotations
@@ -85,6 +85,29 @@ def evaluate(y_true: list[str], y_pred: list[str], labels: list[str]) -> EvalRes
         confusion=confusion_matrix(y_true, y_pred, labels),
         labels=labels,
     )
+
+
+def calculate_comprehensive_metrics(
+    method: str, y_true: list[str], y_pred: list[str], labels: list[str]
+) -> dict[str, dict]:
+    """Plain-dict counterpart to `evaluate()`, keyed by method name.
+
+    Callers merge these (`table.update(...)`) into one table spanning every
+    method — T1.5's reference rows, T2.3's DistilBERT/FinBERT rows, and
+    T3.5's quality gates all read the same shape. No formatting here; that
+    stays in the doc-rendering module.
+    """
+    result = evaluate(y_true, y_pred, labels)
+    return {
+        method: {
+            "accuracy": result.accuracy,
+            "macro_f1": result.macro_f1,
+            "weighted_f1": result.weighted_f1,
+            "per_class_recall": result.per_class_recall,
+            "confusion": result.confusion,
+            "labels": result.labels,
+        }
+    }
 
 
 def format_eval_result(model_name: str, result: EvalResult) -> str:

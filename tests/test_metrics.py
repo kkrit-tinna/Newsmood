@@ -2,6 +2,7 @@ import pytest
 
 from newsmood.evaluation.metrics import (
     accuracy,
+    calculate_comprehensive_metrics,
     confusion_matrix,
     evaluate,
     format_eval_result,
@@ -169,3 +170,49 @@ def test_format_eval_result_includes_model_name_and_numbers():
     assert "negative=1.0000" in text
     assert "neutral=1.0000" in text
     assert "positive=1.0000" in text
+
+
+# --- calculate_comprehensive_metrics ---
+
+
+def test_calculate_comprehensive_metrics_is_keyed_by_method_name():
+    y_true = ["positive", "negative", "neutral"]
+    y_pred = ["positive", "negative", "neutral"]
+    table = calculate_comprehensive_metrics("vader", y_true, y_pred, LABELS)
+    assert set(table.keys()) == {"vader"}
+
+
+def test_calculate_comprehensive_metrics_returns_plain_dict_not_a_string():
+    y_true = ["positive", "negative", "neutral"]
+    y_pred = ["positive", "negative", "neutral"]
+    table = calculate_comprehensive_metrics("vader", y_true, y_pred, LABELS)
+    row = table["vader"]
+    assert isinstance(table, dict)
+    assert isinstance(row, dict)
+    assert row["accuracy"] == 1.0
+    assert row["macro_f1"] == 1.0
+    assert row["weighted_f1"] == 1.0
+    assert row["per_class_recall"] == {label: 1.0 for label in LABELS}
+    assert row["confusion"] == confusion_matrix(y_true, y_pred, LABELS)
+    assert row["labels"] == LABELS
+
+
+def test_calculate_comprehensive_metrics_matches_evaluate_on_imbalanced_case():
+    y_true = ["neutral", "neutral", "neutral", "positive", "negative"]
+    y_pred = ["neutral", "neutral", "positive", "positive", "negative"]
+    result = evaluate(y_true, y_pred, LABELS)
+    row = calculate_comprehensive_metrics("logreg", y_true, y_pred, LABELS)["logreg"]
+    assert row["accuracy"] == result.accuracy
+    assert row["macro_f1"] == result.macro_f1
+    assert row["weighted_f1"] == result.weighted_f1
+    assert row["per_class_recall"] == result.per_class_recall
+    assert row["confusion"] == result.confusion
+
+
+def test_calculate_comprehensive_metrics_rows_merge_into_one_table():
+    y_true = ["positive", "negative", "neutral"]
+    y_pred = ["positive", "negative", "neutral"]
+    table: dict = {}
+    table.update(calculate_comprehensive_metrics("vader", y_true, y_pred, LABELS))
+    table.update(calculate_comprehensive_metrics("logreg", y_true, y_pred, LABELS))
+    assert set(table.keys()) == {"vader", "logreg"}

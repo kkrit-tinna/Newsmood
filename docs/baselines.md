@@ -1,5 +1,15 @@
 # Baselines
 
+<!-- eval:summary:start -->
+| Method | Accuracy | Macro-F1 | Weighted-F1 | Recall (negative / neutral / positive) |
+|---|---|---|---|---|
+| Majority class | 62.16% | 25.56% | 47.66% | 0.00% / 100.00% / 0.00% |
+| Stratified random | 44.02% | 30.54% | 43.99% | 11.11% / 60.25% / 20.30% |
+| VADER | 54.05% | 45.83% | 55.29% | 22.22% / 54.97% / 66.92% |
+| Logistic Regression | 83.59% | 79.97% | 83.44% | 77.78% / 90.06% / 70.68% |
+| Human ceiling | — | — | — | Not a number to compare against directly: `sentences_75agree` keeps only rows where at least 75% of annotators agreed, so up to 25% of annotators disagreed with the kept label on every one of them. A model scoring in the high-80s/low-90s may be brushing a ceiling inherent to the labels, not still leaving headroom on the table. |
+<!-- eval:summary:end -->
+
 ## VADER
 
 `vaderSentiment`'s compound score, thresholded at ±0.05 (`vader.positive_threshold`

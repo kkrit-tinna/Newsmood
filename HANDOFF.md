@@ -70,9 +70,9 @@ GitHub Actions (weekdays 22:00 UTC)
 
 ## Where I am right now
 
-*Last updated: Monday, Sep 21, 2026*
+*Last updated: Tuesday, Sep 22, 2026*
 
-**Status:** T1.1–T1.4 complete. Phase 1 is 4 of 6. On schedule.
+**Status:** T1.1–T1.5 complete. Phase 1 is 5 of 6. On schedule.
 
 **Numbers later tasks depend on**
 
@@ -83,13 +83,16 @@ GitHub Actions (weekdays 22:00 UTC)
 | Majority-class floor | **62.1%** (neutral) — report every accuracy next to this |
 | Negative share | 12.2% |
 | Token length | mean 30.4 · p95 58 · max 150 |
+| Majority class | 62.16% acc · 25.56% macro-F1 · 0.00% negative recall |
+| Stratified random | 44.02% acc · 30.54% macro-F1 · 11.11% negative recall |
 | VADER baseline | 54.05% acc · 45.83% macro-F1 · 22.22% negative recall |
 | LogReg baseline | 83.59% acc · 79.97% macro-F1 · 83.44% weighted-F1 · 77.78% negative recall |
+| Human ceiling | qualitative only — up to 25% of annotators disagreed on every kept `75agree` row, no number fabricated |
 
 **Carry forward**
 - **Fitted vectorizer** lives at `models/baselines/` (`tfidf_vectorizer.joblib`, `logreg_classifier.joblib` — gitignored via the root-anchored `/models/`). `meta.json` alongside them records `sklearn_version` (1.9.1), `train_row_count` (2417), and `test_sentence_sha256`, matching the hash in `data/splits/splits_meta.json`. `reporting/explain.py` loads this same vectorizer in T4.2b via `baselines.logreg.load_vectorizer()` instead of fitting a second one.
 - **T4.2b/T4.4** — `/models/` is gitignored, so the Actions runner won't have the vectorizer. Decide on Oct 5: refit in CI from the pinned split, commit the joblib file, or publish to the Hub.
-- **T1.5** — extends `evaluation/metrics.py`, which is already shaped for it. Adds the majority-class and stratified-random rows to `docs/baselines.md`.
+- **T1.5 output** — `evaluation.metrics.calculate_comprehensive_metrics(method, y_true, y_pred, labels)` returns a plain dict keyed by method name; `evaluation/suite.py`'s `run_reference_and_baselines()` merges majority-class/stratified-random/VADER/LogReg into one table; `newsmood eval --all` writes it into `docs/baselines.md` between `<!-- eval:summary:start/end -->` markers, leaving hand-written prose below untouched. T2.3 adds `distilbert`/`finbert` rows to the same table shape; T3.5's gates read from it.
 - **T2.1** — measure p99 token length before setting `max_length`. Choose 96 or 128. Not 64: it truncates the long tail, and financial sentences often carry their sentiment in the final clause.
 
 **Deviations so far** — full entries in `IMPLEMENTATION_GUIDE.md` §9
@@ -99,8 +102,9 @@ GitHub Actions (weekdays 22:00 UTC)
 - `pytest` added as a `dev` extra
 - `config.py` precedence corrected to explicit > env > yaml > default, asserted in `tests/test_config.py`
 - scikit-learn added as a core dependency
+- `newsmood eval --all` writes only the marker-delimited summary table in `docs/baselines.md`, not the whole file — T1.3's hand-written failure-mode prose lives below it and must survive reruns
 
-**Next task:** T1.5 — metrics module + floor rows, Tue Sep 22.
+**Next task:** T1.6 — baseline analysis writeup, Wed Sep 23.
 
 **Schedule:** no sessions Sunday Sep 20 or Sunday Oct 4. Three Sundays are load-bearing and cannot move to a weekday: **Sep 27** (T2.1+T2.2+T2.3, the fine-tune), **Oct 11** (T3.4, hand-labeling in one sitting), **Oct 18** (T4.4 Actions + release). Full calendar in `IMPLEMENTATION_GUIDE.md` §0.5. If I fall behind, drop T3.6 (Reddit) first and T3.4 (drift analysis) last.
 
