@@ -95,6 +95,8 @@ GitHub Actions (weekdays 22:00 UTC)
 - **Lexicon facts in T1.3 prose are partly wrong.** `docs/baselines.md` §Why it fails and the guide's T1.3 block say VADER has no "liability" entry and reads "aggressive growth" as negative; measured: "liability" is −0.8 in the lexicon (compound −0.2023 alone), "aggressive growth" scores +0.25. "impairment" is correctly absent. Needs a guide edit + §9 line.
 - **T1.6 output** — `docs/baselines.md` §Analysis carries 12 interpretive sentences wrapped in `<!-- CLAIM: ... -->` (invisible when rendered; `grep CLAIM:` to review). T2.3 should check DistilBERT against the four named LogReg failure types on the same test rows.
 - **T2.1** — measure p99 token length before setting `max_length`. Choose 96 or 128. Not 64: it truncates the long tail, and financial sentences often carry their sentiment in the final clause.
+- **T2.3** — check DistilBERT against LogReg's four named failure types on the same test rows, not just the aggregate score: object-dependent direction ("errors fell"), boilerplate outvoting direction ("second quarter of"), lone financial nouns, negation scope ("not quite cheap"). Row-level examples in docs/baselines.md §LogReg versus the floor.
+- **`docs/baselines.md` VADER wording** — the line 155 CLAIM now splits negative-class errors into direction blindness (23) and missing vocabulary (15). Two phrases further down still assume one mechanism: the "Why no threshold fixes either" heading and "the class direction blindness breaks" in the sweep paragraph (line 200). Update both to match.
 
 **Deviations so far** — full entries in `IMPLEMENTATION_GUIDE.md` §9
 - `.gitignore`: `data/` → `data/*`, so `!data/sample/` can apply

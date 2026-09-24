@@ -152,7 +152,7 @@ profit in the same period in 2006 was 36.6 million euros ." 32 of the 63
 true-negative sentences are predicted positive, and 33 of 63 have a compound
 score above zero. Negative recall is 22.22%, VADER's lowest class.
 
-<!-- CLAIM: Bad financial news is characteristically written as a positive-sounding financial noun plus a direction word ("profit … down", "profit decreased"), so a lexicon that scores the noun and ignores the direction reads bad results as good ones — this, not missing vocabulary, is why negative is VADER's worst class. -->
+**CLAIM: Negative is VADER's worst class for two independent reasons that need different fixes. In 23 sentences a positive financial noun sits beside a direction word the lexicon doesn't carry, and VADER predicted positive in all 23 without exception — the noun is scored, the reversal is invisible. In another 15 the sentence contains no lexicon entry at all, so the compound is exactly 0 and the ±0.05 band forces neutral; VADER predicted neutral for all 15. The first is a compositional failure: the words are present and their combination is misread. The second is a coverage failure: the vocabulary of financial decline is absent from a general-English lexicon. Of the 49 negative errors, 23 are the first kind and 15 the second, with 9 more predicted positive without a listed direction word and 2 whose hits nearly cancelled inside the band.**
 
 **2. Single-noun false positives.** VADER's largest confusion cell is true
 neutral → predicted positive: 126 of 518. 126 of the 322 true-neutral
@@ -164,31 +164,52 @@ sentences (39.1%) score at or above +0.05.
 | "Net profit in the same period in 2006 was 36.6 million euros ." | neutral | positive | 0.4404 | profit +1.9 |
 | "The phones are targeted at first time users in growth markets ." | neutral | positive | 0.3818 | growth +1.6 |
 
-<!-- CLAIM: In financial text "shares", "profit" and "growth" are the subject matter, not an evaluation of it; a general-English lexicon gives them fixed positive polarity, so VADER mistakes the topic of a sentence for its sentiment, and every neutral earnings report becomes a positive one. -->
+**CLAIM: In financial text "shares", "profit" and "growth" are the subject matter, not an evaluation of it. A general-English lexicon assigns them fixed positive polarity, so VADER reads the topic of a sentence as its sentiment: 126 of the 322 true-neutral sentences, 39.1%, score at or above +0.05 on a finance noun alone.**
 
 **Why no threshold fixes either.** 44 test sentences score exactly 0.4404.
-Their true labels are 18 negative, 10 neutral and 16 positive. A threshold
-maps each compound value to one label, so at least 26 of these 44 are wrong
-under every possible threshold. 221 sentences score exactly 0.0 — 177 neutral,
-29 positive, 15 negative — so those 44 non-neutral sentences cannot be
-recovered by any threshold either.
+Their true labels are 18 negative, 10 neutral and 16 positive. A threshold maps
+each compound value to one label, so at least 26 of these 44 are wrong under
+every possible threshold. All 18 negatives at 0.4404 mention profit, 7 of the
+10 neutrals mention profit, and the positives include "Operating profit rose to
+EUR 3.11 mn from EUR 1.22 mn …". 221 sentences score exactly 0.0 — 177 neutral,
+29 positive, 15 negative. Whichever label a threshold gives 0.0, at least 44 of
+the 221 are wrong: labelling it positive or negative recovers 29 or 15
+sentences at the cost of 177 neutrals.
 
 Sweeping the thresholds confirms it. The grid set the positive and negative
-cutoffs independently, each from −0.95 to +0.95 in 0.05 steps, and tuned them
-on the test split itself, which flatters VADER:
+cutoffs independently, each from −0.95 to +0.95 in 0.05 steps, skipping pairs
+where the positive cutoff is below the negative one (780 pairs remain), and
+tuned them on the test split itself, which flatters VADER.
+`scripts/vader_threshold_sweep.py` reproduces every row below.
 
 | Setting | Positive / negative cutoff | Accuracy | Macro-F1 | Negative recall |
 |---|---|---|---|---|
 | Configured | +0.05 / −0.05 | 54.05% | 45.83% | 22.22% |
 | Best macro-F1 on grid | +0.40 / −0.25 | 61.00% | 48.07% | 20.63% |
-| Best accuracy on grid | +0.70 / −0.45 | 64.48% | 40.05% | 11.11% |
+| Best macro-F1 above floor | +0.50 / −0.25 | 62.74% | 46.11% | 20.63% |
+| Best accuracy on grid | +0.70 / −0.30 | 64.48% | 42.73% | 19.05% |
 | Symmetric ±0.60 | +0.60 / −0.60 | 61.78% | 33.71% | 0.00% |
+
+64.48% is a three-way tie at +0.70 with the negative cutoff at −0.30, −0.40 or
+−0.45; the row shows the best macro-F1 of the three.
 
 The best macro-F1 threshold still lands below the 62.16% floor on accuracy.
 
-<!-- CLAIM: The only thresholds that clear the floor on accuracy do it by widening the neutral band until VADER approximates the majority-class baseline — macro-F1 falls as accuracy rises — so they hide both failure modes rather than fixing either. -->
+Threshold tuning trades one metric for another without recovering the class it
+fails on. Not one pair with a negative cutoff below zero raises negative recall
+above the configured 22.22% — the class direction blindness breaks is the class
+no usable cutoff can recover; at the extreme, symmetric ±0.60 recovers none of
+it, 0.00% negative recall at 61.78% accuracy. The 276 pairs that do exceed it
+set the negative cutoff at zero or above, labelling all 221 zero-score
+sentences negative, and none exceeds 31.66% accuracy, which is below even the
+44.02% stratified-random baseline. Of the 780 pairs, 102 clear the floor on
+accuracy, and the best of those gains 0.28 points of macro-F1 over the
+configured setting. Above about 63.5% accuracy the trade-off is strictly
+negative: the best-accuracy settings sit at 40–43% macro-F1, below the
+configured 45.83%, because accuracy there is bought by predicting neutral
+88–92% of the time, against 43.82% at the configured cutoffs.
 
-<!-- CLAIM: No threshold can fix a scorer that gives a profit fall, a flat profit report and a profit rise the same number; the fix has to change what gets scored (the direction word, and what it modifies), not where the cut falls. -->
+**CLAIM: No threshold can fix a scorer that gives a profit fall, a flat profit report and a profit rise the same number; the fix has to change what gets scored (the direction word, and what it modifies), not where the cut falls.**
 
 ### LogReg versus the floor
 
@@ -205,9 +226,9 @@ Toward positive: "rose" 2.50, "increase" 2.30, "increased" 2.07, "up" 1.84.
 LogReg classifies all three of VADER's direction-blind sentences correctly,
 and two of the three single-noun sentences.
 
-<!-- CLAIM: The 21-point gap says that in PhraseBank most of the signal needed to beat the floor sits in a small, learnable set of surface direction words — no model of syntax is required to get this far. -->
+**CLAIM: LogReg clears the floor by 21.43 points using nothing but n-gram counts, and the largest learned weights are precisely the direction words VADER's lexicon lacks: "down" 3.21, "decreased" 2.77, "fell" 1.96 toward negative; "rose" 2.50, "increase" 2.30, "increased" 2.07, "up" 1.84 toward positive. It classifies all three of VADER's direction-blind sentences correctly. What this shows is that the direction vocabulary is learnable from 2,417 labelled sentences without any model of syntax. It does not show how much of the 21 points those words account for — that would need an ablation, stripping direction terms from the feature set and remeasuring. Worth running only if the transformer's margin over LogReg turns out to be small.**
 
-<!-- CLAIM: That is partly a property of the corpus: PhraseBank sentences are short, single-clause, period-over-period reporting, the easiest possible case for a bag of n-grams, and RSS headlines should not be assumed to be as easy. -->
+**CLAIM: That is partly a property of the corpus: PhraseBank sentences are short, single-clause, period-over-period reporting, the easiest possible case for a bag of n-grams, and RSS headlines should not be assumed to be as easy.**
 
 Remaining errors, from the 85:
 
@@ -230,13 +251,11 @@ Remaining errors, from the 85:
   "not" is a single feature weighted 0.98 toward neutral, and "not quite" is
   not in the vocabulary.
 
-<!-- CLAIM: A bag of n-grams adds up independent feature weights, so it cannot represent that a direction word's polarity depends on its object ("profit fell" is bad, "errors fell" is good) except by memorising each object–direction pair as its own n-gram, and `min_df=2` discards any pair seen fewer than twice in training. -->
+**CLAIM: A bag of n-grams adds up independent feature weights, so it cannot represent that a direction word's polarity depends on its object ("profit fell" is bad, "errors fell" is good) except by memorising each object–direction pair as its own n-gram, and `min_df=2` discards any pair seen fewer than twice in training.**
 
-<!-- CLAIM: The representation has no notion of which tokens matter: reporting boilerplate like "second quarter of" carries class weight from the training sentences it co-occurred with, and in a long sentence those incidental n-grams can outvote the one word that carries the direction. -->
+**CLAIM: The representation has no notion of which tokens matter: reporting boilerplate like "second quarter of" carries class weight from the training sentences it co-occurred with, and in a long sentence those incidental n-grams can outvote the one word that carries the direction.**
 
 <!-- CLAIM: Negation has no scope in this representation — "not" is a feature in its own right and cannot flip the polarity of the word it modifies. -->
-
-<!-- CLAIM: These four failure types — object-dependent direction, boilerplate outvoting direction, lone financial nouns, and negation scope — are what any later model should be checked against, on these same test rows, rather than assumed fixed by a higher aggregate score. -->
 
 ### Why both F1 columns are reported
 
@@ -259,6 +278,6 @@ seeded draw scored 30.54%, above the majority class's 25.56%.
 VADER shows the same split: 54.05% accuracy is below the floor, and 45.83%
 macro-F1 is well above it.
 
-<!-- CLAIM: Accuracy alone rewards agreeing with the 62% neutral majority and macro-F1 alone hides how often the dominant class is right; only with both columns does the table show that VADER is simultaneously worse than doing nothing and better than doing nothing, depending on whether the minority classes count. -->
+**CLAIM: Accuracy alone rewards agreeing with the 62% neutral majority and macro-F1 alone hides how often the dominant class is right; only with both columns does the table show that VADER is simultaneously worse than doing nothing and better than doing nothing, depending on whether the minority classes count.**
 
-<!-- CLAIM: For this project macro-F1 is the column that matters more: the T3.3 mood index scores neutral as 0 and is driven entirely by positive and negative labels, so a classifier with the floor's 0.00% negative and positive recall would report a mood of exactly 0 every day regardless of the news. -->
+**CLAIM: For this project macro-F1 is the column that matters more: the T3.3 mood index scores neutral as 0 and is driven entirely by positive and negative labels, so a classifier with the floor's 0.00% negative and positive recall would report a mood of exactly 0 every day regardless of the news.**
