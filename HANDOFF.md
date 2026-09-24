@@ -70,9 +70,9 @@ GitHub Actions (weekdays 22:00 UTC)
 
 ## Where I am right now
 
-*Last updated: Tuesday, Sep 22, 2026*
+*Last updated: Wednesday, Sep 23, 2026*
 
-**Status:** T1.1–T1.5 complete. Phase 1 is 5 of 6. On schedule.
+**Status:** T1.1–T1.6 complete. Phase 1 done. On schedule.
 
 **Numbers later tasks depend on**
 
@@ -91,7 +91,9 @@ GitHub Actions (weekdays 22:00 UTC)
 **Carry forward**
 - **T4.2b/T4.4** — `/models/` is gitignored, so the Actions runner won't have the fitted TF-IDF vectorizer (`models/baselines/`, persisted by `baselines/logreg.py`). Decide on Oct 5: refit in CI from the pinned split, commit the joblib file, or publish to the Hub.
 - **T1.5 output** — `evaluation.metrics.calculate_comprehensive_metrics(method, y_true, y_pred, labels)` returns a plain dict keyed by method name; `evaluation/suite.py`'s `run_reference_and_baselines()` merges majority-class/stratified-random/VADER/LogReg into one table; `newsmood eval --all` writes it into `docs/baselines.md` between `<!-- eval:summary:start/end -->` markers, leaving hand-written prose below untouched. T2.3 adds `distilbert`/`finbert` rows to the same table shape; T3.5's gates read from it.
-- **`perform_cross_validation()` is still unported.** §3's reuse table maps it to `evaluation/metrics.py` ("Baselines only"), but neither T1.4 nor T1.5's Done-when required it, so it never landed. No later task in the guide claims it either. T1.6 (baseline analysis writeup, still in the baseline-evaluation phase) is the most natural place to absorb it, but its current guide description doesn't mention it — update `IMPLEMENTATION_GUIDE.md` T1.6 in the same commit if it's picked up there.
+- **`perform_cross_validation()` is still unported.** §3's reuse table maps it to `evaluation/metrics.py` ("Baselines only"), but no task's Done-when requires it, and T1.6 closed without it (docs-only task). Assign it to a task in the guide or drop it from §3.
+- **Lexicon facts in T1.3 prose are partly wrong.** `docs/baselines.md` §Why it fails and the guide's T1.3 block say VADER has no "liability" entry and reads "aggressive growth" as negative; measured: "liability" is −0.8 in the lexicon (compound −0.2023 alone), "aggressive growth" scores +0.25. "impairment" is correctly absent. Needs a guide edit + §9 line.
+- **T1.6 output** — `docs/baselines.md` §Analysis carries 12 interpretive sentences wrapped in `<!-- CLAIM: ... -->` (invisible when rendered; `grep CLAIM:` to review). T2.3 should check DistilBERT against the four named LogReg failure types on the same test rows.
 - **T2.1** — measure p99 token length before setting `max_length`. Choose 96 or 128. Not 64: it truncates the long tail, and financial sentences often carry their sentiment in the final clause.
 
 **Deviations so far** — full entries in `IMPLEMENTATION_GUIDE.md` §9
@@ -103,7 +105,7 @@ GitHub Actions (weekdays 22:00 UTC)
 - scikit-learn added as a core dependency
 - `newsmood eval --all` writes only the marker-delimited summary table in `docs/baselines.md`, not the whole file — T1.3's hand-written failure-mode prose lives below it and must survive reruns
 
-**Next task:** T1.6 — baseline analysis writeup, Wed Sep 23.
+**Next task:** T3.1 — RSS ingest, Thu Sep 24 (moved up; T2.1–T2.3 on Sun Sep 27).
 
 **Schedule:** no sessions Sunday Sep 20 or Sunday Oct 4. Three Sundays are load-bearing and cannot move to a weekday: **Sep 27** (T2.1+T2.2+T2.3, the fine-tune), **Oct 11** (T3.4, hand-labeling in one sitting), **Oct 18** (T4.4 Actions + release). Full calendar in `IMPLEMENTATION_GUIDE.md` §0.5. If I fall behind, drop T3.6 (Reddit) first and T3.4 (drift analysis) last.
 
