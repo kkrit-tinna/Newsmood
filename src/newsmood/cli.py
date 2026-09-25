@@ -1,10 +1,11 @@
+from contextlib import closing
 from pathlib import Path
 
 import typer
 
 from newsmood.baselines import vader
 from newsmood.config import get_settings
-from newsmood.data import feeds
+from newsmood.data import feeds, store
 from newsmood.data.phrasebank import LABEL_NAMES
 from newsmood.evaluation.baselines_doc import update_baselines_doc
 from newsmood.evaluation.metrics import evaluate, format_eval_result
@@ -20,10 +21,14 @@ def ingest(
     dry_run: bool = typer.Option(False, "--dry-run", help="Fetch and normalize, print per-feed counts, write nothing."),
 ):
     """Fetch RSS feeds, normalize, and dedupe into SQLite."""
-    if not dry_run:
-        raise typer.BadParameter("storage arrives in T3.2; only --dry-run is implemented")
-    results = feeds.fetch_all(get_settings().ingest)
+    settings = get_settings()
+    results = feeds.fetch_all(settings.ingest)
     print(feeds.format_dry_run(results))
+    if dry_run:
+        return
+    with closing(store.connect(settings.store.db_path)) as conn:
+        result = store.upsert_headlines(conn, (h for r in results for h in r.headlines))
+    print(f"{settings.store.db_path}: {result.summary()}")
 
 
 @app.command()

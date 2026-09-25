@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import calendar
 import hashlib
+import html
 import time
+import unicodedata
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -24,6 +26,7 @@ class Headline:
     id: str
     source: str
     title: str
+    title_norm: str
     summary: str
     url: str
     published_at: datetime | None
@@ -49,6 +52,19 @@ def url_hash(url: str) -> str:
     return hashlib.sha256(url.encode("utf-8")).hexdigest()
 
 
+def normalize_title(title: str) -> str:
+    """Dedupe key for a headline. Never sent to the model — see module docstring.
+
+    Unescapes HTML entities, folds Unicode compatibility forms (curly quotes,
+    non-breaking spaces), lowercases, turns punctuation and symbols into
+    spaces, and collapses whitespace. Punctuation becomes a space rather than
+    vanishing so "2.5%" and "25%" stay distinct keys.
+    """
+    text = unicodedata.normalize("NFKC", html.unescape(title)).lower()
+    text = "".join(" " if unicodedata.category(ch)[0] in "PS" else ch for ch in text)
+    return " ".join(text.split())
+
+
 def fetch_url(url: str, user_agent: str, timeout: float) -> bytes:
     request = urllib.request.Request(url, headers={"User-Agent": user_agent})
     with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -59,7 +75,8 @@ def parse_feed(body: bytes, source: str, fetched_at: datetime) -> tuple[list[Hea
     """Normalize one feed body. Returns (headlines, number of entries skipped).
 
     An entry without a title or link is skipped: no title means nothing to
-    classify, no link means no stable id.
+    classify, no link means no stable id. A title that normalizes to nothing
+    (all punctuation) counts as no title — it would collide on the empty key.
     """
     parsed = feedparser.parse(body)
     headlines: list[Headline] = []
@@ -67,7 +84,8 @@ def parse_feed(body: bytes, source: str, fetched_at: datetime) -> tuple[list[Hea
     for entry in parsed.entries:
         title = entry.get("title")
         url = entry.get("link")
-        if not title or not url:
+        title_norm = normalize_title(title) if title else ""
+        if not title_norm or not url:
             skipped += 1
             continue
         headlines.append(
@@ -75,6 +93,7 @@ def parse_feed(body: bytes, source: str, fetched_at: datetime) -> tuple[list[Hea
                 id=url_hash(url),
                 source=source,
                 title=title,
+                title_norm=title_norm,
                 summary=entry.get("summary", ""),
                 url=url,
                 published_at=_published_utc(entry),

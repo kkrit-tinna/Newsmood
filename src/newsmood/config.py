@@ -49,6 +49,10 @@ class IngestSettings(BaseModel):
     feeds: list[FeedSettings]
 
 
+class StoreSettings(BaseModel):
+    db_path: str
+
+
 class YamlConfigSource(PydanticBaseSettingsSource):
     """Reads config/default.yaml as a settings layer, below env vars."""
 
@@ -78,6 +82,7 @@ class Settings(BaseSettings):
     vader: VaderSettings
     logreg: LogregSettings
     ingest: IngestSettings
+    store: StoreSettings
 
     @classmethod
     def settings_customise_sources(

@@ -48,10 +48,18 @@ ingest:
   user_agent: "newsmood/0.1 (financial headline sentiment research; https://github.com/kkrit-tinna/Newsmood)"
   timeout_seconds: 15
   delay_seconds: 2
+  # Order matters: on a title_norm collision the first feed listed keeps the
+  # row (source, url, summary). yahoo-finance goes last — it has no summaries
+  # and is the stalest feed. IMPLEMENTATION_GUIDE.md §9, 2026-09-25.
   feeds:
-    - name: yahoo-finance
-      url: https://finance.yahoo.com/news/rssindex
     - name: cnbc-finance
       url: https://www.cnbc.com/id/10000664/device/rss/rss.html
     - name: marketwatch-top
       url: https://feeds.content.dowjones.io/public/rss/mw_topstories
+    - name: yahoo-finance
+      url: https://finance.yahoo.com/news/rssindex
+
+store:
+  # One SQLite file, gitignored (*.db and data/*). Relative to the working
+  # directory, like splits_dir. Override with NEWSMOOD_STORE__DB_PATH.
+  db_path: data/newsmood.db

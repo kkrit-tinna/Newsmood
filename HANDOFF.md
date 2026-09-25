@@ -70,9 +70,9 @@ GitHub Actions (weekdays 22:00 UTC)
 
 ## Where I am right now
 
-*Last updated: Thursday, Sep 24, 2026*
+*Last updated: Friday, Sep 25, 2026*
 
-**Status:** T1.1–T1.6 and T3.1 complete. On schedule.
+**Status:** T1.1–T1.6, T3.1 and T3.2 complete. On schedule. `newsmood ingest` now writes to SQLite.
 
 **Numbers later tasks depend on**
 
@@ -86,13 +86,16 @@ GitHub Actions (weekdays 22:00 UTC)
 | Stratified random | 44.02% acc · 30.54% macro-F1 · 11.11% negative recall — single seeded draw, `dataset.seed=42`, not averaged over repeats |
 | VADER baseline | 54.05% acc · 45.83% macro-F1 · 22.22% negative recall |
 | LogReg baseline | 83.59% acc · 79.97% macro-F1 · 83.44% weighted-F1 · 77.78% negative recall |
-| RSS feeds | 3/3 live (yahoo-finance 49, cnbc-finance 30, marketwatch-top 10 entries per fetch), but only 16 published on the probe's US date. Yahoo lags about 43 h. See `docs/sources.md` |
+| RSS feeds | 3/3 live, in config order cnbc-finance 30, marketwatch-top 10, yahoo-finance 49 entries per fetch. Only 16 published on the T3.1 probe's US date. Yahoo lags about 43 h. See `docs/sources.md` |
+| Store, first live ingest | Sep 25: 89 rows, 89 distinct `title_norm`, 89 with `published_at`. No cross-outlet duplicates. Re-run: 0 inserted, 89 duplicates |
 | Human ceiling | qualitative only — up to 25% of annotators disagreed on every kept `75agree` row, no number fabricated |
 
 **Carry forward**
-- **T3.1 output**: `data/feeds.fetch_all(settings.ingest)` returns one `FeedResult` per feed, each holding `Headline` rows (`id`, `source`, raw `title`, `summary`, `url`, `published_at` UTC or None, `fetched_at`). A dead feed becomes an error in its result instead of raising. Plain `newsmood ingest` errors until T3.2 adds storage.
-- **T3.2**: `title_norm` is not computed yet; dedupe on it is T3.2's job. MarketWatch URLs carry `?mod=mw_rss_topstories`, so the url-hash id depends on that parameter staying the same.
-- **T3.3/T3.5**: Yahoo serves stale items, 4 of 49 from 2024-11 to 2026-09-22. Bucket by `published_at`, not `fetched_at`. If Yahoo's lag persists, T3.5 decides whether to gate it or drop it. Yahoo has no summaries.
+- **T3.2 output**: `data/store.py` holds the only `headlines` schema. `connect(settings.store.db_path)` creates it, and `upsert_headlines(conn, headlines)` returns inserted/duplicate counts. Dedupe is `UNIQUE(title_norm)`, and the first-seen row keeps its id, source, title, url, summary and `fetched_at`. `published_at` only moves earlier. Ingest never touches `label`/`confidence`/`scored_at`, and the schema checks those three are all set or all NULL. **T2.5 writes scores to unscored rows (`label IS NULL`). T3.3 buckets by `published_at`.**
+- **Timestamp invariant**: stored timestamps are `YYYY-MM-DDTHH:MM:SS.ffffff+00:00`, 32 characters, UTC. The upsert compares them as strings. Anything writing timestamps (T2.5's `scored_at`) must use `store._ts`.
+- **Known limitation — dedupe discards syndication count (T3.2, for T2.6 model card)**: `UNIQUE(title_norm)` collapses one wire story run by five outlets into one row, so how widely a story was carried is lost. Accepted trade: without it the index overweights whatever the wires ran. A reviewer will ask; state it in `docs/model_card.md`.
+- **Empty summaries, mitigated but not eliminated**: Yahoo is now last in feed order, so a story shared with CNBC or MarketWatch keeps their summary. Stories only Yahoo carries still have none.
+- **T3.3/T3.5**: Yahoo serves stale items, 4 of 49 from 2024-11 to 2026-09-22. Bucket by `published_at`, not `fetched_at`. If Yahoo's lag persists, T3.5 decides whether to gate it or drop it.
 - **T4.2b/T4.4** — `/models/` is gitignored, so the Actions runner won't have the fitted TF-IDF vectorizer (`models/baselines/`, persisted by `baselines/logreg.py`). Decide on Oct 5: refit in CI from the pinned split, commit the joblib file, or publish to the Hub.
 - **T1.5 output** — `evaluation.metrics.calculate_comprehensive_metrics(method, y_true, y_pred, labels)` returns a plain dict keyed by method name; `evaluation/suite.py`'s `run_reference_and_baselines()` merges majority-class/stratified-random/VADER/LogReg into one table; `newsmood eval --all` writes it into `docs/baselines.md` between `<!-- eval:summary:start/end -->` markers, leaving hand-written prose below untouched. T2.3 adds `distilbert`/`finbert` rows to the same table shape; T3.5's gates read from it.
 - **`perform_cross_validation()` is still unported.** §3's reuse table maps it to `evaluation/metrics.py` ("Baselines only"), but no task's Done-when requires it, and T1.6 closed without it (docs-only task). Assign it to a task in the guide or drop it from §3.
@@ -111,8 +114,9 @@ GitHub Actions (weekdays 22:00 UTC)
 - scikit-learn added as a core dependency
 - All three candidate feeds kept. Yahoo is stale, not dead
 - `newsmood eval --all` writes only the marker-delimited summary table in `docs/baselines.md`, not the whole file — T1.3's hand-written failure-mode prose lives below it and must survive reruns
+- Feed order: Yahoo moved last so the dedupe tiebreak keeps richer rows. `store.db_path` added to config
 
-**Next task:** T3.2, the SQLite store, on Fri Sep 25. T2.1–T2.3 follow on Sun Sep 27.
+**Next task:** T2.1+T2.2+T2.3, the fine-tune, on Sun Sep 27, in one session. T2.4 (Hub publish) follows Mon Sep 28 and needs the HF write token.
 
 **Schedule:** no sessions Sunday Sep 20 or Sunday Oct 4. Three Sundays are load-bearing and cannot move to a weekday: **Sep 27** (T2.1+T2.2+T2.3, the fine-tune), **Oct 11** (T3.4, hand-labeling in one sitting), **Oct 18** (T4.4 Actions + release). Full calendar in `IMPLEMENTATION_GUIDE.md` §0.5. If I fall behind, drop T3.6 (Reddit) first and T3.4 (drift analysis) last.
 

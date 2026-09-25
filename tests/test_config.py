@@ -75,6 +75,7 @@ def _write_yaml_config(path: Path) -> None:
                     "delay_seconds": 0,
                     "feeds": [{"name": "yaml-feed", "url": "https://yaml.test/rss"}],
                 },
+                "store": {"db_path": "yaml.db"},
             }
         )
     )
@@ -114,6 +115,15 @@ def test_env_beats_yaml(tmp_path, monkeypatch):
     assert settings.dataset.splits_dir == "env-splits"
     # a field the env var didn't touch still falls through to yaml
     assert settings.vader.positive_threshold == 0.22
+
+
+def test_db_path_resolves_through_settings(tmp_path, monkeypatch):
+    _point_settings_at_yaml(tmp_path, monkeypatch)
+    monkeypatch.delenv("NEWSMOOD_STORE__DB_PATH", raising=False)
+    assert Settings().store.db_path == "yaml.db"
+
+    monkeypatch.setenv("NEWSMOOD_STORE__DB_PATH", "env.db")
+    assert Settings().store.db_path == "env.db"
 
 
 # --- explicit kwargs > env ---
