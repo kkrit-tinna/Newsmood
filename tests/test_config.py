@@ -69,6 +69,12 @@ def _write_yaml_config(path: Path) -> None:
                     "max_iter": 1000,
                     "artifact_dir": "yaml-artifact-dir",
                 },
+                "ingest": {
+                    "user_agent": "yaml-agent",
+                    "timeout_seconds": 1,
+                    "delay_seconds": 0,
+                    "feeds": [{"name": "yaml-feed", "url": "https://yaml.test/rss"}],
+                },
             }
         )
     )

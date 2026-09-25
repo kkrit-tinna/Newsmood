@@ -41,3 +41,17 @@ logreg:
   class_weight: balanced
   max_iter: 1000
   artifact_dir: models/baselines
+
+ingest:
+  # RSS feeds, fetched sequentially. Each was verified live on 2026-09-24
+  # before being listed here — see docs/sources.md for per-feed findings.
+  user_agent: "newsmood/0.1 (financial headline sentiment research; https://github.com/kkrit-tinna/Newsmood)"
+  timeout_seconds: 15
+  delay_seconds: 2
+  feeds:
+    - name: yahoo-finance
+      url: https://finance.yahoo.com/news/rssindex
+    - name: cnbc-finance
+      url: https://www.cnbc.com/id/10000664/device/rss/rss.html
+    - name: marketwatch-top
+      url: https://feeds.content.dowjones.io/public/rss/mw_topstories

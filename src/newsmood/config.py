@@ -37,6 +37,18 @@ class LogregSettings(BaseModel):
     artifact_dir: str
 
 
+class FeedSettings(BaseModel):
+    name: str
+    url: str
+
+
+class IngestSettings(BaseModel):
+    user_agent: str
+    timeout_seconds: float
+    delay_seconds: float
+    feeds: list[FeedSettings]
+
+
 class YamlConfigSource(PydanticBaseSettingsSource):
     """Reads config/default.yaml as a settings layer, below env vars."""
 
@@ -65,6 +77,7 @@ class Settings(BaseSettings):
     dataset: DatasetSettings
     vader: VaderSettings
     logreg: LogregSettings
+    ingest: IngestSettings
 
     @classmethod
     def settings_customise_sources(
