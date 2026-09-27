@@ -76,6 +76,17 @@ def _write_yaml_config(path: Path) -> None:
                     "feeds": [{"name": "yaml-feed", "url": "https://yaml.test/rss"}],
                 },
                 "store": {"db_path": "yaml.db"},
+                "training": {
+                    "max_length": 7,
+                    "epochs": 1,
+                    "batch_size": 1,
+                    "learning_rate": 0.1,
+                    "weight_decay": 0.0,
+                    "warmup_ratio": 0.0,
+                    "early_stopping_patience": 1,
+                    "early_stopping_min_delta": 0.0,
+                    "output_dir": "yaml-output",
+                },
             }
         )
     )

@@ -21,6 +21,7 @@ train = [
     "torch",
     "transformers",
     "datasets",
+    "tqdm",
 ]
 dev = [
     "pytest",

@@ -1,4 +1,5 @@
 from contextlib import closing
+from enum import Enum
 from pathlib import Path
 
 import typer
@@ -14,6 +15,15 @@ from newsmood.evaluation.suite import HUMAN_CEILING_NOTE, run_reference_and_base
 BASELINES_DOC_PATH = Path("docs/baselines.md")
 
 app = typer.Typer()
+
+
+class Device(str, Enum):
+    # Mirrors finetune.DEVICE_CHOICES; listed here so the training stack is
+    # imported only when `train` runs. tests/test_training.py keeps them equal.
+    auto = "auto"
+    cpu = "cpu"
+    mps = "mps"
+    cuda = "cuda"
 
 
 @app.command()
@@ -44,9 +54,32 @@ def report():
 
 
 @app.command()
-def train():
+def train(
+    dry_run: bool = typer.Option(False, "--dry-run", help="One forward and one backward pass, save nothing."),
+    limit: int = typer.Option(None, "--limit", help="Training rows in the dry-run batch (default 32). Dry run only."),
+    device: Device = typer.Option(
+        Device.auto,
+        "--device",
+        help="auto picks cuda > mps > cpu. If MPS looks stuck on small batches, try cpu.",
+    ),
+):
     """Fine-tune DistilBERT on the Financial PhraseBank."""
-    print("not implemented")
+    # Imported here, not at module top: torch/transformers live behind the
+    # [train] extra, and `newsmood ingest` must work without them.
+    from newsmood.training import finetune
+
+    if limit is not None and not dry_run:
+        raise typer.BadParameter("--limit applies to --dry-run only; the fine-tune uses the whole train split")
+    try:
+        resolved = finetune.resolve_device(device.value)
+    except ValueError as e:
+        raise typer.BadParameter(str(e), param_hint="--device")
+    settings = get_settings()
+    print(f"device: {resolved} (--device {device.value}), seed {settings.dataset.seed}")
+    if dry_run:
+        print(finetune.dry_run(settings, 32 if limit is None else limit, resolved).summary())
+        return
+    finetune.fine_tune(settings, resolved)
 
 
 @app.command(name="eval")

@@ -63,3 +63,24 @@ store:
   # One SQLite file, gitignored (*.db and data/*). Relative to the working
   # directory, like splits_dir. Override with NEWSMOOD_STORE__DB_PATH.
   db_path: data/newsmood.db
+
+training:
+  # Base model is dataset.tokenizer — max_length was measured under it, so
+  # there is no second key to drift. Token lengths over all 3,453 rows:
+  # mean 30.4, p95 58, p99 69, max 150. Truncates 3 rows (1 train, 2 val,
+  # 0 test). Batches are padded dynamically to their own longest row, so the
+  # cap costs nothing on typical batches. IMPLEMENTATION_GUIDE.md §9, 2026-09-27.
+  max_length: 96
+  # IMPLEMENTATION_GUIDE.md T2.2. AdamW lr/weight decay and 10% linear warmup
+  # are the archived repo's values, kept as-is (§3).
+  epochs: 3
+  batch_size: 16
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  # With 3 epochs and patience 3 this cannot fire; it is wired in so a longer
+  # run stops and restores the best-val-loss weights.
+  early_stopping_patience: 3
+  early_stopping_min_delta: 0.001
+  # save_pretrained model + tokenizer and history.json. Gitignored (/models/).
+  output_dir: models/local

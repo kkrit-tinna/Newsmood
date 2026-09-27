@@ -224,9 +224,9 @@ Ported from the archived `social_media_sentiment_analysis` repo. Copy these in, 
 |---|---|---|
 | `calculate_comprehensive_metrics()` | `evaluation/metrics.py` | Add macro-F1 alongside weighted |
 | `perform_cross_validation()` | `evaluation/metrics.py` | Baselines only |
-| `get_device()` | `training/finetune.py` | As-is |
-| `EarlyStopping` | `training/finetune.py` | As-is |
-| `SentimentDataset` | `training/dataset.py` | `max_length` 128 → 192 |
+| `get_device()` | `training/finetune.py` | Order cuda > mps > cpu (archived: mps > cuda > cpu). §9 2026-09-27 |
+| `EarlyStopping` | `training/finetune.py` | Fix `save_checkpoint`: `state_dict().copy()` is shallow, restore was a no-op. §9 2026-09-27 |
+| `SentimentDataset` | `training/dataset.py` | `max_length` 128 → 96 (measured p99 69), truncate only, pad per batch. §9 2026-09-27 |
 | AdamW `lr=2e-5, wd=0.01` + linear warmup 10% | `training/finetune.py` | As-is. These are correct |
 | VADER ±0.05 compound thresholds | `baselines/vader.py` | As-is |
 | `TfidfVectorizer(ngram_range=(1,3), min_df=2, max_df=0.95)` | `baselines/logreg.py` | `max_features` 1000 → 20000 |
@@ -379,11 +379,15 @@ Write the analysis paragraph in `docs/baselines.md`: why VADER fails on financia
 **Depends on:** T1.5
 **Commit:** `feat: distilbert-framework-setup`
 
-`training/dataset.py` — port `SentimentDataset`, `max_length` from T1.2's
-measured p95: **58** (mean 30.4, max 150 — see `docs/dataset.md`). Placeholder
-of 192 superseded, §9 Deviations 2026-09-17.
+`training/dataset.py` — port `SentimentDataset` with `max_length` **96**,
+set in `config/default.yaml` under `training.max_length`. Measured over all
+3,453 rows: mean 30.4, p95 58, **p99 69**, max 150. 96 truncates 3 rows (1
+train, 2 val, 0 test); 58 would truncate 159. The dataset truncates but does
+not pad — `DataCollatorWithPadding` pads each batch to its own longest row.
+Supersedes both the 192 placeholder and the p95-of-58 guidance, §9 Deviations
+2026-09-27.
 
-`training/finetune.py` — port `get_device()` and `EarlyStopping`. Use:
+`training/finetune.py` — port `get_device()` and `EarlyStopping` (with its checkpoint copy fixed, §9 2026-09-27). Use:
 
 ```python
 AutoModelForSequenceClassification.from_pretrained(
@@ -398,7 +402,7 @@ Not the archived repo's custom `nn.Module` with a hand-rolled `[CLS]` head. The 
 
 Weighted `CrossEntropyLoss` with weights from the training split.
 
-**Done when:** `newsmood train --dry-run --limit 32` completes one forward and one backward pass on CPU.
+**Done when:** `newsmood train --dry-run --limit 32 --device cpu` completes one forward and one backward pass on CPU.
 
 ---
 
@@ -408,7 +412,7 @@ Weighted `CrossEntropyLoss` with weights from the training split.
 
 3 epochs, batch 16, `lr=2e-5`, `weight_decay=0.01`, linear warmup over 10% of steps. Log train loss, val loss, val accuracy per epoch to `models/local/history.json`.
 
-⚠️ **Needs a long session — scheduled for Sunday Sep 27.** On a laptop CPU, 3 epochs over ~2,400 training sentences runs 20–40 minutes. It fits a 1–2 hour Sunday alongside T2.3; it does not fit a 30-minute weekday slot. Published DistilBERT results on this dataset land around 82%; the 80% target is realistic but not automatic.
+**Runtime, measured 2026-09-27:** 3 epochs over 2,417 training sentences took 67 s on Apple Silicon MPS (epochs of 24.9 s, 21.4 s, 20.7 s). CPU is estimated at about 3 minutes from 12 timed steps (349 ms/step vs 230 ms on MPS). It fits a 30-minute weekday slot. The original 20–40 minute estimate assumed every row padded to 192 tokens; §9 Deviations 2026-09-27. Published DistilBERT results on this dataset land around 82%; the 80% target is realistic but not automatic.
 
 Start the run at the top of the session and read `docs/dataset.md` while it trains — you will be asked about this data in an interview, and the wait is free reading time.
 
@@ -807,3 +811,9 @@ Append whenever reality differs. Date, task ID, what changed, why.
 | 2026-09-24 | T1.6 follow-up | `docs/baselines.md` VADER threshold-sweep table now reproduced by `scripts/vader_threshold_sweep.py`; best-accuracy row and the zero-compound claim corrected | T1.6's sweep table came from an unsaved inline script. Rerunning it from the new script reproduces all four original rows exactly, but 64.48% accuracy is a three-way tie at +0.70 (negative cutoff −0.30, −0.40, −0.45) and the doc showed the worst macro-F1 of the three (−0.45, 40.05%); the row now shows −0.30 (42.73% macro-F1, 19.05% negative recall). The prose said the 44 non-neutral sentences among the 221 scoring exactly 0.0 "cannot be recovered by any threshold"; a positive cutoff ≤ 0 recovers the 29 positives (or a negative cutoff ≥ 0 the 15 negatives) at the cost of the 177 neutrals. Corrected to: at least 44 of the 221 are wrong under every threshold. |
 | 2026-09-24 | T3.1 | T3.1 **Depends on** changed from T2.5 to T1.1 | §0.5 already schedules T3.1 before T2.x ("no model needed"), and ingest does not use the classifier. The stale T2.5 dependency conflicted with the CLAUDE.md rule against starting a task whose dependency is uncommitted. All three candidate feeds kept. `yahoo-finance` is live but stale: its newest item was about 43 h old, and 4 of 49 items date from 2024-11 to 2026-09-22 | Verified by two live fetches (see `docs/sources.md`). "Returns entries" is the guide's liveness bar, and Yahoo meets it. Filtering by `published_at` and a freshness gate belong to T3.3 and T3.5, not ingest. Plain `newsmood ingest` (no `--dry-run`) exits with an error until T3.2 | Storage is T3.2's job. A non-dry-run that fetched and then discarded everything would look like a successful ingest. |
 | 2026-09-25 | T3.2 | `config/default.yaml` feed order changed from yahoo-finance, cnbc-finance, marketwatch-top to cnbc-finance, marketwatch-top, yahoo-finance. Database path added as `store.db_path` | `UNIQUE(title_norm)` dedupe keeps the first-seen row, so config order is the tiebreak for which outlet's source, url and summary survive. Yahoo has no summary field, so with Yahoo first a story shared with CNBC or MarketWatch kept an empty summary. Yahoo is also the weakest feed: about 43 h stale, and 29 of 49 items from one publisher, Insider Monkey (`docs/sources.md`). Putting Yahoo last makes the arbitrary tiebreak favor the richer feeds. Stories only Yahoo carries still have no summary |
+| 2026-09-27 | T2.1 | `max_length` set to 96 with dynamic padding, not the measured p95 of 58. In `config/default.yaml` as `training.max_length` | p95 truncates by construction: 159 of 3,453 rows (4.6%) exceed 58 tokens, and financial sentences often carry their sentiment in the final clause. Measured p99 is 69 (train 69, val 69, test 68), max 150. 96 truncates 3 rows: 1 train, 2 val, 0 test. `SentimentDataset` no longer pads to `max_length`; `DataCollatorWithPadding` pads each batch to its longest row, so the higher cap costs nothing on typical batches (a 32-row batch padded to 58). Supersedes the 2026-09-17 entry's 58. |
+| 2026-09-27 | T2.1 | `EarlyStopping.save_checkpoint` fixed rather than ported as-is: `copy.deepcopy(model.state_dict())` replaces `model.state_dict().copy()` | `dict.copy()` is shallow. The saved tensors alias the live parameters, so every optimizer step overwrote the "best" weights and `restore_best_weights` silently restored the latest ones. `tests/test_training.py::test_early_stopping_restores_best_weights_not_live_ones` fails against the original line and passes against the fix. |
+| 2026-09-27 | T2.1 | Done-when changed from `newsmood train --dry-run --limit 32` to `newsmood train --dry-run --limit 32 --device cpu` | `newsmood train` gained `--device auto|cpu|mps|cuda`, default `auto` → `get_device()`. On the Apple Silicon dev machine the original command now runs on MPS, not the CPU the gate names. The flag means the same thing in every mode, so the gate names CPU explicitly instead of the dry run special-casing it. |
+| 2026-09-27 | T2.1 | `get_device()` order changed to cuda > mps > cpu, not ported as-is (mps > cuda > cpu) | The archived function has a CUDA branch, so an NVIDIA machine without MPS already picked CUDA — no machine was silently falling back to CPU. The change makes the intended preference explicit and tested (`test_get_device_prefers_cuda_then_mps_then_cpu`, availability mocked) rather than relying on MPS and CUDA never coexisting. |
+| 2026-09-27 | T2.2 | `tqdm` declared in the `[train]` extra | `training/finetune.py` imports it directly for the per-epoch progress bar. It was only present as a transitive dependency of transformers, which is not a promise to keep shipping it. |
+| 2026-09-27 | T2.2 | Runtime estimate corrected in the T2.2 block: 20–40 minutes on laptop CPU → 67 s measured on MPS | Per-epoch seconds from `models/local/history.json`: 24.85, 21.35, 20.75 (66.95 s of epochs; 67.1 s from `started_at` to `finished_at`, including the save). The old estimate assumed every row padded to the 192-token placeholder. Dynamic padding (T2.1) pads each batch to its own longest row, roughly 30–60 tokens, cutting the tokens processed by about 4x. The fine-tune fits a 30-minute weekday slot; it was scheduled as an unmovable Sunday on the old number. §0.5 line 70 still states 20–40 minutes. |

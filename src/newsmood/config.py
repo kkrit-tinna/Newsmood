@@ -53,6 +53,18 @@ class StoreSettings(BaseModel):
     db_path: str
 
 
+class TrainingSettings(BaseModel):
+    max_length: int
+    epochs: int
+    batch_size: int
+    learning_rate: float
+    weight_decay: float
+    warmup_ratio: float
+    early_stopping_patience: int
+    early_stopping_min_delta: float
+    output_dir: str
+
+
 class YamlConfigSource(PydanticBaseSettingsSource):
     """Reads config/default.yaml as a settings layer, below env vars."""
 
@@ -83,6 +95,7 @@ class Settings(BaseSettings):
     logreg: LogregSettings
     ingest: IngestSettings
     store: StoreSettings
+    training: TrainingSettings
 
     @classmethod
     def settings_customise_sources(
