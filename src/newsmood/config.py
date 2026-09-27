@@ -65,6 +65,12 @@ class TrainingSettings(BaseModel):
     output_dir: str
 
 
+class FinbertSettings(BaseModel):
+    repo_id: str
+    revision: str
+    batch_size: int
+
+
 class YamlConfigSource(PydanticBaseSettingsSource):
     """Reads config/default.yaml as a settings layer, below env vars."""
 
@@ -96,6 +102,7 @@ class Settings(BaseSettings):
     ingest: IngestSettings
     store: StoreSettings
     training: TrainingSettings
+    finbert: FinbertSettings
 
     @classmethod
     def settings_customise_sources(

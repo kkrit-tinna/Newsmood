@@ -5,6 +5,9 @@ from datasets import Dataset, DatasetDict
 
 from newsmood.config import DatasetSettings, LogregSettings, Settings, VaderSettings
 from newsmood.data.phrasebank import LABEL_NAMES, save_splits
+import pytest
+
+from newsmood.evaluation import suite
 from newsmood.evaluation.suite import run_reference_and_baselines
 
 _AGREEMENT_CONFIGS = [
@@ -100,13 +103,21 @@ def _save_fixture_splits(settings: Settings) -> None:
     save_splits(splits, Path(settings.dataset.splits_dir), settings)
 
 
-def test_run_reference_and_baselines_returns_one_row_per_method(tmp_path):
+def test_run_reference_and_baselines_returns_one_row_per_method(tmp_path, monkeypatch):
     settings = _settings(tmp_path)
     _save_fixture_splits(settings)
+    # The real transformer rows need a trained model / a ~440 MB download;
+    # tests/test_classifier.py covers their loading and label mapping.
+    monkeypatch.setitem(suite._RUNS, "distilbert", lambda _: (_TEST_SENTENCES, _TEST_LABELS, _TEST_LABELS))
+    monkeypatch.setitem(
+        suite._RUNS, "finbert", lambda _: (_TEST_SENTENCES, _TEST_LABELS, ["neutral", "neutral", "positive"])
+    )
 
     table = run_reference_and_baselines(settings)
 
-    assert set(table.keys()) == {"majority_class", "stratified_random", "vader", "logreg"}
+    assert list(table.keys()) == ["majority_class", "stratified_random", "vader", "logreg", "distilbert", "finbert"]
+    assert table["distilbert"]["accuracy"] == 1.0
+    assert table["finbert"]["accuracy"] == pytest.approx(2 / 3)
     for row in table.values():
         assert set(row.keys()) == {"accuracy", "macro_f1", "weighted_f1", "per_class_recall", "confusion", "labels"}
         assert row["labels"] == LABEL_NAMES

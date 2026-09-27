@@ -87,6 +87,7 @@ def _write_yaml_config(path: Path) -> None:
                     "early_stopping_min_delta": 0.0,
                     "output_dir": "yaml-output",
                 },
+                "finbert": {"repo_id": "yaml/finbert", "revision": "yaml-rev", "batch_size": 1},
             }
         )
     )

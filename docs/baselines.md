@@ -9,6 +9,8 @@ All rows below are measured on the pinned test split (n=518).
 | Stratified random | 44.02% | 30.54% | 43.99% | 11.11% / 60.25% / 20.30% |
 | VADER | 54.05% | 45.83% | 55.29% | 22.22% / 54.97% / 66.92% |
 | Logistic Regression | 83.59% | 79.97% | 83.44% | 77.78% / 90.06% / 70.68% |
+| DistilBERT (fine-tuned) | 92.08% | 90.19% | 92.16% | 96.83% / 93.17% / 87.22% |
+| FinBERT (trained on PhraseBank, reference only) | 95.37% | 94.45% | 95.42% | 98.41% / 94.10% / 96.99% |
 | Human ceiling | — | — | — | Not a number to compare against directly: `sentences_75agree` keeps only rows where at least 75% of annotators agreed, so up to 25% of annotators disagreed with the kept label on every one of them. A model scoring in the high-80s/low-90s may be brushing a ceiling inherent to the labels, not still leaving headroom on the table. |
 
 "Stratified random" is a single seeded draw from the training label distribution (`dataset.seed=42`), not an average over repeats — rerun with the same seed to reproduce it exactly.
@@ -256,6 +258,39 @@ Remaining errors, from the 85:
 **CLAIM: The representation has no notion of which tokens matter: reporting boilerplate like "second quarter of" carries class weight from the training sentences it co-occurred with, and in a long sentence those incidental n-grams can outvote the one word that carries the direction.**
 
 <!-- CLAIM: Negation has no scope in this representation — "not" is a feature in its own right and cannot flip the polarity of the word it modifies. -->
+
+### DistilBERT confusion matrix
+
+Fine-tuned DistilBERT (`models/local/`, epoch 3 of 3, trained on MPS, scored
+on CPU) on the same 518-row test split. Rows are true labels, columns are
+predicted labels.
+
+| true ↓ / predicted → | negative | neutral | positive | n | recall |
+|---|---|---|---|---|---|
+| negative | **61** | 2 | 0 | 63 | 96.83% |
+| neutral | 5 | **300** | 17 | 322 | 93.17% |
+| positive | 9 | 8 | **116** | 133 | 87.22% |
+| predicted n | 75 | 310 | 133 | 518 | |
+| precision | 81.33% | 96.77% | 87.22% | | |
+
+It makes 41 errors, against LogReg's 85. DistilBERT confuses neutral with
+positive most: 17 true-neutral sentences are predicted positive, the largest
+off-diagonal cell and 17 of the 41 errors. By class, positive is the weakest,
+at 87.22% recall. Of the 17 positives it misses, 9 are predicted negative
+and 8 neutral.
+
+The expected negative → neutral confusion barely occurs: 2 of 63 negatives
+(LogReg: 9). Negative has the highest recall of the three classes, but the
+lowest precision. 14 of the 75 negative predictions are wrong: 5 are true
+neutral and 9 true positive.
+
+Nine sentences land on the opposite side of neutral, all of them positive
+predicted negative, with none the other way. LogReg makes 11 such errors (6
+positive → negative, 5 negative → positive).
+
+**CLAIM: The loss weighting (negative ×2.74, neutral ×0.54, positive ×1.30, from the training split) is the likely reason the errors lean toward negative: 96.83% negative recall at 81.33% precision, and every opposite-direction error in that one direction. This is a hypothesis, not a measurement. Confirming it needs a run without class weights on the same split.**
+
+**CLAIM: The 9 positive → negative errors matter more to this project than the 17 neutral → positive ones. The T3.3 mood index scores each headline +1 / 0 / −1, so a neutral → positive error shifts that headline's contribution by 1, while a positive → negative error shifts it by 2.**
 
 ### Why both F1 columns are reported
 

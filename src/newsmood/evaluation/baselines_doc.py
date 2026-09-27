@@ -22,7 +22,8 @@ _DISPLAY_NAMES = {
     "vader": "VADER",
     "logreg": "Logistic Regression",
     "distilbert": "DistilBERT (fine-tuned)",
-    "finbert": "FinBERT (zero-shot)",
+    # Not zero-shot: FinBERT was fine-tuned on PhraseBank. §9 2026-09-27.
+    "finbert": "FinBERT (trained on PhraseBank, reference only)",
 }
 
 # Reference rows carry no accuracy/F1 of their own — they're a qualitative

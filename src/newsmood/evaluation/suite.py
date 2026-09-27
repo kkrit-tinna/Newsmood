@@ -7,8 +7,9 @@ read the merged table rather than reimplementing any of this.
 
 from __future__ import annotations
 
-from newsmood.baselines import logreg, reference, vader
+from newsmood.baselines import finbert, logreg, reference, vader
 from newsmood.config import Settings
+from newsmood.evaluation import distilbert
 from newsmood.data.phrasebank import LABEL_NAMES
 from newsmood.evaluation.metrics import calculate_comprehensive_metrics
 
@@ -26,11 +27,13 @@ _RUNS = {
     "stratified_random": reference.stratified_random_predict_test_split,
     "vader": vader.predict_test_split,
     "logreg": logreg.predict_test_split,
+    "distilbert": distilbert.predict_test_split,
+    "finbert": finbert.predict_test_split,
 }
 
 
 def run_reference_and_baselines(settings: Settings) -> dict[str, dict]:
-    """Runs majority-class, stratified-random, VADER, and LogReg against the
+    """Runs majority-class, stratified-random, VADER, LogReg, DistilBERT and FinBERT against the
     pinned test split and returns one merged metrics table, method name ->
     `calculate_comprehensive_metrics` row."""
     table: dict[str, dict] = {}

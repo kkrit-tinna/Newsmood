@@ -84,3 +84,12 @@ training:
   early_stopping_min_delta: 0.001
   # save_pretrained model + tokenizer and history.json. Gitignored (/models/).
   output_dir: models/local
+
+finbert:
+  # Zero-shot reference ceiling for T2.3, scored on CPU for reproducibility.
+  # Pinned commit, never main: a re-upload would silently change the row.
+  # Its id2label order differs from ours and is mapped by name in
+  # baselines/finbert.py. ~440 MB, cached by transformers under ~/.cache/huggingface.
+  repo_id: ProsusAI/finbert
+  revision: 4556d13015211d73dccd3fdd39d39232506f3e43
+  batch_size: 32
