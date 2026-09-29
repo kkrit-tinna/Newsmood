@@ -438,11 +438,15 @@ Include the confusion matrix in `docs/baselines.md` and write a sentence about w
 **Depends on:** T2.3
 **Commit:** `feat: model-hub-publish`
 
-`huggingface-cli upload` the `save_pretrained` directory to `<your-username>/newsmood-distilbert-financial`. Public.
+`hf upload` the `save_pretrained` directory to `<your-username>/newsmood-distilbert-financial`. Public. (`hf` replaced `huggingface-cli` in huggingface_hub 1.x; published as `kkrit-tinna/newsmood-distilbert-financial` at `be7b809e0d8f7bd50e77d902aee199363b7e2a66`, §9 Deviations 2026-09-28.)
 
 `models/loader.py` downloads on first use, caches under `~/.cache/newsmood/`, and **pins a revision SHA** in `config/default.yaml`. An unpinned `main` means the model can change under a user without their version changing, which makes every reported number unreproducible.
 
 Print a one-line notice on first download: size, destination, and that it happens once.
+
+`config.py` rejects any `model.revision` (or `finbert.revision`) that is not a full 40-char lowercase commit SHA. `huggingface_hub>=1.32,<2` is a core dependency because the loader imports it directly.
+
+T2.4 includes a thin `newsmood score --text` (one headline, device from `finetune.resolve_device()`, label and confidence) because its Done-when needs one. `--file`, SQLite scoring, batching and `--benchmark` stay in T2.5. §9 Deviations 2026-09-28.
 
 **Done when:** on a machine with the cache deleted, `newsmood score --text "Profit fell sharply"` downloads the model and prints `negative` with a confidence.
 
@@ -729,7 +733,7 @@ Until the trailing window has 30 days of history, block 2 degrades to raw term f
 Run `newsmood report --offline` unless the online path is done. `.github/workflows/daily.yml`, `cron: "0 22 * * 1-5"` (22:00 UTC, after the US close). Also `workflow_dispatch` so you can trigger it by hand.
 
 - `ANTHROPIC_API_KEY` from repo secrets, **only if online mode is enabled**. Never echoed.
-- Cache `~/.cache/huggingface` — otherwise every run re-downloads 265 MB.
+- Cache `~/.cache/newsmood` (`model.cache_dir`, key it on `model.revision`) — otherwise every run re-downloads 269 MB. Not `~/.cache/huggingface`: the loader passes its own `cache_dir`. §9 Deviations 2026-09-28.
 - Commit the report back with a bot identity, `[skip ci]` in the message.
 - On failure, write the gate report to the job summary so the run page shows *why*.
 
@@ -819,3 +823,7 @@ Append whenever reality differs. Date, task ID, what changed, why.
 | 2026-09-27 | T2.2 | Runtime estimate corrected in the T2.2 block: 20–40 minutes on laptop CPU → 67 s measured on MPS | Per-epoch seconds from `models/local/history.json`: 24.85, 21.35, 20.75 (66.95 s of epochs; 67.1 s from `started_at` to `finished_at`, including the save). The old estimate assumed every row padded to the 192-token placeholder. Dynamic padding (T2.1) pads each batch to its own longest row, roughly 30–60 tokens, cutting the tokens processed by about 4x. The fine-tune fits a 30-minute weekday slot; it was scheduled as an unmovable Sunday on the old number. §0.5 line 70 still states 20–40 minutes. |
 | 2026-09-27 | T2.3 | FinBERT row relabelled from "FinBERT-zeroshot" / "reference ceiling" to "FinBERT (trained on PhraseBank, reference only)" | ProsusAI/finbert was fine-tuned on Financial PhraseBank itself, so it is not zero-shot on this data. Our `sentences_75agree` test rows are a subset of `sentences_50agree`, which it trained on, and the checkpoint ships without its split, so the overlap cannot be measured. Its 95.37% test accuracy and 98.41% negative recall are contaminated. They are not a fair ceiling, and the gap to DistilBERT is not a measure of headroom. Pinned to revision `4556d13015211d73dccd3fdd39d39232506f3e43`, scored on CPU, outputs mapped by name (its order is positive, negative, neutral). |
 | 2026-09-27 | T2.3 | Done-when changed from five rows to six | The guide's "five rows" (majority, VADER, LogReg, DistilBERT, FinBERT) predates T1.5 adding the stratified-random floor to the same table. With DistilBERT the table has six measured rows, plus the qualitative human-ceiling line. |
+| 2026-09-28 | T2.4 | Upload CLI is `hf upload`, not `huggingface-cli upload` | huggingface_hub 1.32 (installed) ships the `hf` command; `huggingface-cli` is the pre-1.0 name. Published to `kkrit-tinna/newsmood-distilbert-financial`, pinned at `be7b809e0d8f7bd50e77d902aee199363b7e2a66`. |
+| 2026-09-28 | T2.4 | Model cache is `~/.cache/newsmood` (`model.cache_dir` in config), and T4.4's "Cache `~/.cache/huggingface`" line changed to match | `models/loader.py` passes `cache_dir` to `snapshot_download`, so the model never lands in the default HF cache. Caching `~/.cache/huggingface` in Actions would cache nothing and re-download 269 MB every run. |
+| 2026-09-28 | T2.4 | T2.4 includes a single-text `newsmood score --text`, plus an unbatched `classifier.classify()` for label + confidence | T2.4's Done-when runs `newsmood score --text`, which T2.5 was meant to build. Only the one-headline path is in T2.4; `--file`, SQLite scoring, batching and `--benchmark` remain T2.5. |
+| 2026-09-28 | T2.4 | `huggingface_hub>=1.32,<2` declared as a core dependency | `models/loader.py` imports `snapshot_download`/`model_info` directly. It only arrived transitively via transformers, which is not a promise to keep shipping it. |

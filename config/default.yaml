@@ -85,6 +85,16 @@ training:
   # save_pretrained model + tokenizer and history.json. Gitignored (/models/).
   output_dir: models/local
 
+model:
+  # The fine-tuned DistilBERT that `newsmood score` uses, from the Hub (T2.4).
+  # Pinned to a full 40-char commit SHA, never main or a branch: a re-upload
+  # would otherwise change every label without the package version changing.
+  # config.py rejects anything else. Downloaded once by models/loader.py into
+  # cache_dir, never read from training.output_dir.
+  repo_id: kkrit-tinna/newsmood-distilbert-financial
+  revision: be7b809e0d8f7bd50e77d902aee199363b7e2a66
+  cache_dir: ~/.cache/newsmood
+
 finbert:
   # Zero-shot reference ceiling for T2.3, scored on CPU for reproducibility.
   # Pinned commit, never main: a re-upload would silently change the row.

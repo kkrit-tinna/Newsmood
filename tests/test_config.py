@@ -14,7 +14,12 @@ import yaml as yamllib
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 import newsmood.config as config_module
-from newsmood.config import DatasetSettings, Settings, VaderSettings, YamlConfigSource
+import pytest
+from pydantic import ValidationError
+
+from newsmood.config import DatasetSettings, FinbertSettings, ModelSettings, Settings, VaderSettings, YamlConfigSource
+
+_YAML_SHA = "0123456789abcdef0123456789abcdef01234567"
 
 _AGREEMENT_CONFIGS = [
     "sentences_allagree",
@@ -87,7 +92,8 @@ def _write_yaml_config(path: Path) -> None:
                     "early_stopping_min_delta": 0.0,
                     "output_dir": "yaml-output",
                 },
-                "finbert": {"repo_id": "yaml/finbert", "revision": "yaml-rev", "batch_size": 1},
+                "model": {"repo_id": "yaml/model", "revision": _YAML_SHA, "cache_dir": "yaml-cache"},
+                "finbert": {"repo_id": "yaml/finbert", "revision": _YAML_SHA, "batch_size": 1},
             }
         )
     )
@@ -219,3 +225,40 @@ def test_yaml_beats_field_default(tmp_path, monkeypatch):
     probe_cls = _probe_settings_class(yaml_path)
 
     assert probe_cls().value == "from-yaml"
+
+
+# --- Hub revisions must be full commit SHAs ---
+
+
+def test_real_config_pins_full_commit_shas():
+    settings = Settings()
+    assert settings.model.revision == "be7b809e0d8f7bd50e77d902aee199363b7e2a66"
+    assert len(settings.finbert.revision) == 40
+
+
+@pytest.mark.parametrize(
+    "revision",
+    [
+        "main",
+        "v1.0",
+        "refs/pr/1",
+        "be7b809",  # short hash
+        "be7b809e0d8f7bd50e77d902aee199363b7e2a6",  # 39 chars
+        "be7b809e0d8f7bd50e77d902aee199363b7e2a66a",  # 41 chars
+        "BE7B809E0D8F7BD50E77D902AEE199363B7E2A66",  # uppercase misses the lowercase snapshot folder
+        "ge7b809e0d8f7bd50e77d902aee199363b7e2a66",  # 40 chars, not hex
+        "",
+    ],
+)
+@pytest.mark.parametrize("cls", [ModelSettings, FinbertSettings])
+def test_revision_that_is_not_a_full_sha_is_rejected(cls, revision):
+    other = {"cache_dir": "c"} if cls is ModelSettings else {"batch_size": 1}
+    with pytest.raises(ValidationError, match="not a full 40-char commit SHA"):
+        cls(repo_id="r", revision=revision, **other)
+
+
+def test_env_override_of_revision_is_validated_too(tmp_path, monkeypatch):
+    _point_settings_at_yaml(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEWSMOOD_MODEL__REVISION", "main")
+    with pytest.raises(ValidationError, match="not a full 40-char commit SHA"):
+        Settings()

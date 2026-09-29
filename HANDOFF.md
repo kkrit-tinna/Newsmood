@@ -70,9 +70,9 @@ GitHub Actions (weekdays 22:00 UTC)
 
 ## Where I am right now
 
-*Last updated: Friday, Sep 25, 2026*
+*Last updated: Monday, Sep 28, 2026*
 
-**Status:** T1.1–T1.6, T3.1 and T3.2 complete. On schedule. `newsmood ingest` now writes to SQLite.
+**Status:** T1.1–T1.6, T2.1–T2.4, T3.1 and T3.2 complete. On schedule. The fine-tuned model is on the Hub at a pinned SHA, and `newsmood score --text` loads it from `~/.cache/newsmood/`, not `models/local/`.
 
 **Numbers later tasks depend on**
 
@@ -86,46 +86,50 @@ GitHub Actions (weekdays 22:00 UTC)
 | Stratified random | 44.02% acc · 30.54% macro-F1 · 11.11% negative recall — single seeded draw, `dataset.seed=42`, not averaged over repeats |
 | VADER baseline | 54.05% acc · 45.83% macro-F1 · 22.22% negative recall |
 | LogReg baseline | 83.59% acc · 79.97% macro-F1 · 83.44% weighted-F1 · 77.78% negative recall |
+| DistilBERT — **TEST split** | 92.08% acc · 90.19% macro-F1 · 92.16% weighted-F1 · recall neg/neu/pos 96.83 / 93.17 / 87.22% — n=518, scored on CPU by `newsmood eval --all`. 41 errors vs LogReg's 85. This is the published model's number |
+| DistilBERT — VALIDATION split | 93.44% val acc · 90.79% val macro-F1 — epoch 3 of 3, MPS, seed 42, n=518 val rows (`models/local/history.json`). Not comparable to the test rows |
+| FinBERT | 95.37% acc · 94.45% macro-F1 — trained on PhraseBank, reference only, **not a ceiling** |
+| Published model | `kkrit-tinna/newsmood-distilbert-financial` @ `be7b809e0d8f7bd50e77d902aee199363b7e2a66` (public). 269 MB, 7 files. `model.repo_id`/`model.revision` in config |
 | RSS feeds | 3/3 live, in config order cnbc-finance 30, marketwatch-top 10, yahoo-finance 49 entries per fetch. Only 16 published on the T3.1 probe's US date. Yahoo lags about 43 h. See `docs/sources.md` |
 | Store, first live ingest | Sep 25: 89 rows, 89 distinct `title_norm`, 89 with `published_at`. No cross-outlet duplicates. Re-run: 0 inserted, 89 duplicates |
-| DistilBERT — **VALIDATION split, not test** | 93.44% val acc · 90.79% val macro-F1 — epoch 3 of 3, MPS, seed 42, n=518 val rows (`models/local/history.json`). Not comparable to the test-split rows above; the test row comes from `newsmood eval --all` in T2.3 |
 | Human ceiling | qualitative only — up to 25% of annotators disagreed on every kept `75agree` row, no number fabricated |
 
 **Carry forward**
-- **T3.2 output**: `data/store.py` holds the only `headlines` schema. `connect(settings.store.db_path)` creates it, and `upsert_headlines(conn, headlines)` returns inserted/duplicate counts. Dedupe is `UNIQUE(title_norm)`, and the first-seen row keeps its id, source, title, url, summary and `fetched_at`. `published_at` only moves earlier. Ingest never touches `label`/`confidence`/`scored_at`, and the schema checks those three are all set or all NULL. **T2.5 writes scores to unscored rows (`label IS NULL`). T3.3 buckets by `published_at`.**
-- **Timestamp invariant**: stored timestamps are `YYYY-MM-DDTHH:MM:SS.ffffff+00:00`, 32 characters, UTC. The upsert compares them as strings. Anything writing timestamps (T2.5's `scored_at`) must use `store._ts`.
-- **Known limitation — dedupe discards syndication count (T3.2, for T2.6 model card)**: `UNIQUE(title_norm)` collapses one wire story run by five outlets into one row, so how widely a story was carried is lost. Accepted trade: without it the index overweights whatever the wires ran. A reviewer will ask; state it in `docs/model_card.md`.
-- **Empty summaries, mitigated but not eliminated**: Yahoo is now last in feed order, so a story shared with CNBC or MarketWatch keeps their summary. Stories only Yahoo carries still have none.
+- **T2.4 output**: `models/loader.ensure_model(settings.model)` checks the cache with `local_files_only=True`, and only on a miss calls `model_info` for the size, prints one notice to stderr, and downloads with `snapshot_download(revision=<SHA>, cache_dir=~/.cache/newsmood, token=False)`. It never reads `models/local/`. `config.py` rejects any `model.revision`/`finbert.revision` that is not a full 40-char lowercase SHA. `classifier.classify()` returns `(label, softmax confidence)`, unbatched. `newsmood score --text` works; `--file`, SQLite and `--benchmark` are T2.5.
+- **Hub README is a placeholder.** It lives only in the gitignored `models/local/README.md` and is what the Hub repo shows now. T2.6 replaces it from `docs/model_card.md`: a new upload means a new commit SHA, so bump `model.revision` in the same change.
+- **T2.5 — device conflict to settle**: the guide says "batched CPU inference", but `score` uses `finetune.resolve_device("auto")`, which is MPS on this Mac (as T2.4 was asked to do). Pick one, and say which device the benchmark numbers came from. Must stay `resolve_device()`, no new device logic.
+- **T2.5/T4.6 — score needs `[train]`**: `newsmood score` imports torch and transformers, which only the `[train]` extra installs. A plain `pip install newsmood` gets the loader but cannot score. Decide the extras split before release.
+- **T2.5**: writes scores to unscored rows (`label IS NULL`); `scored_at` must use `store._ts`. `labels` go through `output_labels()` (by name, never index).
+- **T3.2 output**: `data/store.py` holds the only `headlines` schema. `connect(settings.store.db_path)` creates it, and `upsert_headlines(conn, headlines)` returns inserted/duplicate counts. Dedupe is `UNIQUE(title_norm)`, and the first-seen row keeps its id, source, title, url, summary and `fetched_at`. `published_at` only moves earlier. Ingest never touches `label`/`confidence`/`scored_at`, and the schema checks those three are all set or all NULL. **T3.3 buckets by `published_at`.**
+- **Timestamp invariant**: stored timestamps are `YYYY-MM-DDTHH:MM:SS.ffffff+00:00`, 32 characters, UTC. The upsert compares them as strings. Anything writing timestamps must use `store._ts`.
+- **T2.6 model card — which epoch shipped**: EarlyStopping (patience 3, min_delta 0.001) never fired: val loss fell every epoch (0.3164 → 0.2128 → 0.1941). The saved weights are epoch 3, the lowest val loss. Epoch 2 had the higher val accuracy (94.02% vs 93.44%). The card must state that epoch 3 shipped, selected on val loss, so 94.02% is never read as the published model's number.
+- **T2.6 model card — FinBERT is not a ceiling**: ProsusAI/finbert was fine-tuned on Financial PhraseBank, very likely including many of our test sentences, and the overlap can't be measured (no published split). The card must not present it as a zero-shot ceiling or read the gap to DistilBERT as headroom. Label it "trained on PhraseBank, reference only", as `docs/baselines.md` does.
+- **T2.6 model card — MPS reproducibility**: the published run trained on MPS. Seeds are fixed, but MPS kernel scheduling is nondeterministic, so results are reproducible in substance and not bit-identical. Exact reproduction requires `--device cpu`. The card must say which device the published run used (`device` in `history.json`).
+- **T2.6 model card — dedupe discards syndication count (T3.2)**: `UNIQUE(title_norm)` collapses one wire story run by five outlets into one row. Accepted trade: without it the index overweights whatever the wires ran. State it in the card.
+- **Still open from T2.3**: check DistilBERT against LogReg's four named failure types on the same test rows (object-dependent direction "errors fell", boilerplate "second quarter of", lone financial nouns, negation scope "not quite cheap"). `docs/baselines.md` has the confusion matrix but not this row-level check.
+- **Empty summaries, mitigated but not eliminated**: Yahoo is last in feed order, so a story shared with CNBC or MarketWatch keeps their summary. Stories only Yahoo carries still have none.
 - **T3.3/T3.5**: Yahoo serves stale items, 4 of 49 from 2024-11 to 2026-09-22. Bucket by `published_at`, not `fetched_at`. If Yahoo's lag persists, T3.5 decides whether to gate it or drop it.
-- **T4.2b/T4.4** — `/models/` is gitignored, so the Actions runner won't have the fitted TF-IDF vectorizer (`models/baselines/`, persisted by `baselines/logreg.py`). Decide on Oct 5: refit in CI from the pinned split, commit the joblib file, or publish to the Hub.
-- **T1.5 output** — `evaluation.metrics.calculate_comprehensive_metrics(method, y_true, y_pred, labels)` returns a plain dict keyed by method name; `evaluation/suite.py`'s `run_reference_and_baselines()` merges majority-class/stratified-random/VADER/LogReg into one table; `newsmood eval --all` writes it into `docs/baselines.md` between `<!-- eval:summary:start/end -->` markers, leaving hand-written prose below untouched. T2.3 adds `distilbert`/`finbert` rows to the same table shape; T3.5's gates read from it.
-- **`perform_cross_validation()` is still unported.** §3's reuse table maps it to `evaluation/metrics.py` ("Baselines only"), but no task's Done-when requires it, and T1.6 closed without it (docs-only task). Assign it to a task in the guide or drop it from §3.
-- **Lexicon facts in T1.3 prose are partly wrong.** `docs/baselines.md` §Why it fails and the guide's T1.3 block say VADER has no "liability" entry and reads "aggressive growth" as negative; measured: "liability" is −0.8 in the lexicon (compound −0.2023 alone), "aggressive growth" scores +0.25. "impairment" is correctly absent. Needs a guide edit + §9 line.
-- **T1.6 output** — `docs/baselines.md` §Analysis carries 12 interpretive sentences wrapped in `<!-- CLAIM: ... -->` (invisible when rendered; `grep CLAIM:` to review). T2.3 should check DistilBERT against the four named LogReg failure types on the same test rows.
-- **T2.1 output** — p99 measured at 69, so `training.max_length: 96` in config; batches pad to their own longest row via `DataCollatorWithPadding`. Base model reuses `dataset.tokenizer`, no second key. `finetune.class_weights()` uses the full train split: negative 2.740, neutral 0.536, positive 1.297. `EarlyStopping` restore bug (shallow `state_dict().copy()`) fixed and tested. `newsmood train --dry-run --limit 32 --device cpu` is the T2.1 gate; plain `newsmood train --device <d>` runs the full fine-tune. Archived code is not trusted as-is — test each ported piece.
-- **T2.2 output** — `models/local/` (gitignored) holds the `save_pretrained` model and tokenizer, plus `history.json`: seed, resolved device, hyperparameters actually used (incl. 456 total / 45 warmup steps), class weights, train/val row counts, val majority floor, torch/transformers versions, start/finish timestamps, status, and per-epoch train loss, val loss, val accuracy, val macro-F1 and seconds. Written after every epoch, so a crash keeps finished epochs. `finetune.seed_everything(settings.dataset.seed)` seeds Python, numpy and torch before the model is built; two CPU dry runs give a bit-identical loss (1.097620964050293).
-- **T2.6 model card — which epoch shipped**: EarlyStopping (patience 3, min_delta 0.001) never fired: val loss fell every epoch (0.3164 → 0.2128 → 0.1941), so it would not have fired at any patience. The saved weights are epoch 3, the lowest val loss. Epoch 2 had the higher val accuracy (94.02% vs 93.44%). The card must state that epoch 3 shipped, selected on val loss, so 94.02% is never read as the published model's number.
-- **T2.6 model card — FinBERT is not a ceiling**: the eval table's FinBERT row (95.37% acc, 94.45% macro-F1, 98.41% negative recall on test) is contaminated. ProsusAI/finbert was fine-tuned on Financial PhraseBank, very likely including many of our test sentences, and the overlap can't be measured (no published split). The card must not present it as a zero-shot ceiling or read the gap to DistilBERT as headroom. Label it "trained on PhraseBank, reference only", as `docs/baselines.md` does.
-- **T2.6 model card — MPS reproducibility**: today's fine-tune ran on MPS. Seeds are fixed, but MPS kernel scheduling is nondeterministic, so results are reproducible in substance and not bit-identical. Exact reproduction requires `--device cpu`. The model card must say which device the published run used (`device` in `models/local/history.json`).
-- **T4.5 README** — the training section must note that `PYTORCH_ENABLE_MPS_FALLBACK=1` routes unimplemented MPS operators to CPU, in case someone hits an operator gap. Docs only, not code.
-- **T2.5** — `newsmood score` must reuse `finetune.resolve_device()`, not define its own device logic. Almost nobody runs `newsmood train` (the model ships from the Hub), so `score` is where portability matters, and it fails quietly there: scoring on CPU is slow but correct.
-- **T2.3** — check DistilBERT against LogReg's four named failure types on the same test rows, not just the aggregate score: object-dependent direction ("errors fell"), boilerplate outvoting direction ("second quarter of"), lone financial nouns, negation scope ("not quite cheap"). Row-level examples in docs/baselines.md §LogReg versus the floor.
-- **`docs/baselines.md` VADER wording** — the line 155 CLAIM now splits negative-class errors into direction blindness (23) and missing vocabulary (15). Two phrases further down still assume one mechanism: the "Why no threshold fixes either" heading and "the class direction blindness breaks" in the sweep paragraph (line 200). Update both to match.
+- **T4.2b/T4.4** — `/models/` is gitignored, so the Actions runner won't have the fitted TF-IDF vectorizer (`models/baselines/`). Decide on Oct 5: refit in CI from the pinned split, commit the joblib file, or publish to the Hub. T4.4 caches `~/.cache/newsmood`, keyed on `model.revision`.
+- **T1.5 output** — `newsmood eval --all` writes the summary table into `docs/baselines.md` between `<!-- eval:summary:start/end -->` markers; T3.5's gates read from the same table shape.
+- **`perform_cross_validation()` is still unported.** §3's reuse table maps it to `evaluation/metrics.py`, but no task's Done-when requires it. Assign it to a task in the guide or drop it from §3.
+- **Lexicon facts in T1.3 prose are partly wrong.** `docs/baselines.md` §Why it fails and the guide's T1.3 block say VADER has no "liability" entry and reads "aggressive growth" as negative; measured: "liability" is −0.8 (compound −0.2023 alone), "aggressive growth" scores +0.25. Needs a guide edit + §9 line.
+- **`docs/baselines.md` VADER wording** — the "Why no threshold fixes either" heading and "the class direction blindness breaks" (line ~202) still assume one mechanism; the line-155 CLAIM splits negative errors into direction blindness (23) and missing vocabulary (15). Update both.
+- **T1.6 output** — `docs/baselines.md` §Analysis carries interpretive sentences wrapped in `<!-- CLAIM: ... -->` (`grep CLAIM:` to review).
+- **T4.5 README** — the training section must note that `PYTORCH_ENABLE_MPS_FALLBACK=1` routes unimplemented MPS operators to CPU. Docs only.
 
 **Deviations so far** — full entries in `IMPLEMENTATION_GUIDE.md` §9
-- `.gitignore`: `data/` → `data/*`, so `!data/sample/` can apply
+- `.gitignore`: `data/` → `data/*`, `models/` → `/models/`
 - `datasets>=4.0` dropped script loading → raw zip download, SHA-256 pinned, `PhraseBankSourceChanged` on mismatch
 - `max_length`: placeholder 192 → p95 58 → 96 with dynamic padding (measured p99 69)
-- `EarlyStopping` shallow-copy bug fixed, not ported as-is
-- `get_device()` order cuda > mps > cpu. T2.1 Done-when now names `--device cpu`
-- `pytest` added as a `dev` extra
+- `pytest` added as a `dev` extra; scikit-learn and `huggingface_hub>=1.32,<2` added as core dependencies; `tqdm` in `[train]`
 - `config.py` precedence corrected to explicit > env > yaml > default, asserted in `tests/test_config.py`
-- scikit-learn added as a core dependency
-- All three candidate feeds kept. Yahoo is stale, not dead
-- `newsmood eval --all` writes only the marker-delimited summary table in `docs/baselines.md`, not the whole file — T1.3's hand-written failure-mode prose lives below it and must survive reruns
-- Feed order: Yahoo moved last so the dedupe tiebreak keeps richer rows. `store.db_path` added to config
+- All three candidate feeds kept. Yahoo is stale, not dead. Yahoo moved last so the dedupe tiebreak keeps richer rows. `store.db_path` added to config
+- `newsmood eval --all` writes only the marker-delimited summary table in `docs/baselines.md`
+- `EarlyStopping` shallow-copy bug fixed, not ported as-is. `get_device()` order cuda > mps > cpu. T2.1 Done-when names `--device cpu`
+- T2.2 runtime: 67 s on MPS, not 20–40 min. T2.3: FinBERT relabelled "trained on PhraseBank, reference only"; Done-when six rows
+- T2.4: `hf upload`, not `huggingface-cli`. Cache `~/.cache/newsmood` (T4.4 line fixed to match). Thin `score --text` pulled into T2.4 for its Done-when
 
-**Next task:** T2.1+T2.2+T2.3, the fine-tune, on Sun Sep 27, in one session. T2.4 (Hub publish) follows Mon Sep 28 and needs the HF write token.
+**Next task:** T2.5 (batched `newsmood score`: `--file`, SQLite scoring, `--benchmark`), Tue Sep 29. Settle the device question above first.
 
 **Schedule:** no sessions Sunday Sep 20 or Sunday Oct 4. Three Sundays are load-bearing and cannot move to a weekday: **Sep 27** (T2.1+T2.2+T2.3, the fine-tune), **Oct 11** (T3.4, hand-labeling in one sitting), **Oct 18** (T4.4 Actions + release). Full calendar in `IMPLEMENTATION_GUIDE.md` §0.5. If I fall behind, drop T3.6 (Reddit) first and T3.4 (drift analysis) last.
 
@@ -133,7 +137,7 @@ GitHub Actions (weekdays 22:00 UTC)
 - [x] GitHub repo `newsmood`, public
 - [x] Repo cloned, `newsmood_env` created, `pip install -e ".[train]"` working
 - [x] PyPI name recorded: `newsmood` or `newsmood-cli`
-- [ ] Hugging Face account + write token — **needed by T2.4, Mon Sep 28**
+- [x] Hugging Face account + write token — used for T2.4 upload (Sep 28)
 - [ ] Anthropic API key — *deferred, optional.* Only for T4.1 online mode. Claude Pro does not include API access.
 
 **Known environment quirks**

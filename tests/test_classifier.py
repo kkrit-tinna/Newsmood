@@ -1,6 +1,6 @@
 import pytest
 
-from newsmood.models.classifier import IncompleteCheckpoint, load_classifier, output_labels, predict
+from newsmood.models.classifier import IncompleteCheckpoint, classify, load_classifier, output_labels, predict
 
 # ProsusAI/finbert config.json at the pinned revision.
 FINBERT_ID2LABEL = {0: "positive", 1: "negative", 2: "neutral"}
@@ -57,6 +57,39 @@ def test_predict_maps_each_output_index_by_name():
     sentences = ["0", "1", "2", "1"]
     preds = predict(sentences, FakeModel(), fake_tokenizer, batch_size=3, device="cpu")
     assert preds == ["positive", "negative", "neutral", "negative"]
+
+
+def test_classify_returns_label_by_name_and_softmax_confidence():
+    torch = pytest.importorskip("torch")
+
+    class Config:
+        id2label = FINBERT_ID2LABEL
+
+    class FakeModel:
+        config = Config()
+
+        def eval(self):
+            pass
+
+        def to(self, device):
+            return self
+
+        def __call__(self, input_ids, **_):
+            # Logit 2.0 at the first token id, 0 elsewhere: softmax max = e^2 / (e^2 + 2).
+            return type("Out", (), {"logits": 2.0 * torch.nn.functional.one_hot(input_ids[:, 0], num_classes=3).float()})()
+
+    class Batch(dict):
+        def to(self, device):
+            return self
+
+    def fake_tokenizer(texts, **_):
+        return Batch(input_ids=torch.tensor([[int(t)] for t in texts]))
+
+    results = classify(["1", "2"], FakeModel(), fake_tokenizer, device="cpu")
+
+    expected = torch.tensor(2.0).exp().item() / (torch.tensor(2.0).exp().item() + 2)
+    assert [label for label, _ in results] == ["negative", "neutral"]
+    assert all(c == pytest.approx(expected) for _, c in results)
 
 
 def _tiny(tmp_path, with_head: bool):

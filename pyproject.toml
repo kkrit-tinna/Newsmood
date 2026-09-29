@@ -14,6 +14,7 @@ dependencies = [
     "pyyaml",
     "vaderSentiment",
     "scikit-learn>=1.9,<2",
+    "huggingface_hub>=1.32,<2",
 ]
 
 [project.optional-dependencies]

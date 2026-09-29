@@ -1,8 +1,9 @@
+import re
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import yaml
-from pydantic import BaseModel
+from pydantic import AfterValidator, BaseModel
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "default.yaml"
@@ -65,9 +66,30 @@ class TrainingSettings(BaseModel):
     output_dir: str
 
 
+_COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
+
+
+def _require_commit_sha(revision: str) -> str:
+    """A Hub revision must be a full lowercase commit SHA. "main", a branch,
+    a tag or a short hash can all move or become ambiguous; a full SHA can't.
+    Lowercase because the cache's snapshots/<sha>/ folder is lowercase."""
+    if not _COMMIT_SHA.fullmatch(revision):
+        raise ValueError(f"revision {revision!r} is not a full 40-char commit SHA; pin a commit, never a branch or tag")
+    return revision
+
+
+CommitSha = Annotated[str, AfterValidator(_require_commit_sha)]
+
+
+class ModelSettings(BaseModel):
+    repo_id: str
+    revision: CommitSha
+    cache_dir: str
+
+
 class FinbertSettings(BaseModel):
     repo_id: str
-    revision: str
+    revision: CommitSha
     batch_size: int
 
 
@@ -102,6 +124,7 @@ class Settings(BaseSettings):
     ingest: IngestSettings
     store: StoreSettings
     training: TrainingSettings
+    model: ModelSettings
     finbert: FinbertSettings
 
     @classmethod

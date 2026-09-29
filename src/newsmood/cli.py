@@ -42,9 +42,22 @@ def ingest(
 
 
 @app.command()
-def score():
-    """Classify unscored headlines with the fine-tuned DistilBERT model."""
-    print("not implemented")
+def score(
+    text: str = typer.Option(None, "--text", help="One headline to classify."),
+):
+    """Classify a headline with the fine-tuned DistilBERT model from the Hub."""
+    if text is None:
+        raise typer.BadParameter("pass --text; --file and scoring the SQLite store arrive in T2.5")
+    # Imported here: torch/transformers live behind the [train] extra.
+    from newsmood.models.classifier import classify, load_classifier
+    from newsmood.models.loader import ensure_model
+    from newsmood.training import finetune
+
+    settings = get_settings()
+    device = finetune.resolve_device("auto")
+    model, tokenizer = load_classifier(str(ensure_model(settings.model)))
+    label, confidence = classify([text], model, tokenizer, device, settings.training.max_length)[0]
+    print(f"{label} {confidence:.4f}")
 
 
 @app.command()

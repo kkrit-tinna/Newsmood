@@ -66,3 +66,17 @@ def predict(sentences: list[str], model, tokenizer, batch_size: int, device, max
             ).to(device)
             predictions += [names[i] for i in model(**batch).logits.argmax(dim=-1).tolist()]
     return predictions
+
+
+def classify(sentences: list[str], model, tokenizer, device, max_length: int | None = None) -> list[tuple[str, float]]:
+    """(label, softmax confidence) per sentence, in one unbatched forward pass.
+    For a handful of sentences (`score --text`); batching is T2.5's."""
+    import torch
+
+    names = output_labels(model.config.id2label)
+    model.to(device)
+    model.eval()
+    with torch.inference_mode():
+        batch = tokenizer(sentences, padding=True, truncation=True, max_length=max_length, return_tensors="pt").to(device)
+        confidence, index = model(**batch).logits.softmax(dim=-1).max(dim=-1)
+    return [(names[i], c) for i, c in zip(index.tolist(), confidence.tolist())]
