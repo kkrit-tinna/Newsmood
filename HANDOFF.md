@@ -98,7 +98,6 @@ GitHub Actions (weekdays 22:00 UTC)
 - **T2.4 output**: `models/loader.ensure_model(settings.model)` checks the cache with `local_files_only=True`, and only on a miss calls `model_info` for the size, prints one notice to stderr, and downloads with `snapshot_download(revision=<SHA>, cache_dir=~/.cache/newsmood, token=False)`. It never reads `models/local/`. `config.py` rejects any `model.revision`/`finbert.revision` that is not a full 40-char lowercase SHA. `classifier.classify()` returns `(label, softmax confidence)`, unbatched. `newsmood score --text` works; `--file`, SQLite and `--benchmark` are T2.5.
 - **Hub README is a placeholder.** It lives only in the gitignored `models/local/README.md` and is what the Hub repo shows now. T2.6 replaces it from `docs/model_card.md`: a new upload means a new commit SHA, so bump `model.revision` in the same change.
 - **T2.5 — device conflict to settle**: the guide says "batched CPU inference", but `score` uses `finetune.resolve_device("auto")`, which is MPS on this Mac (as T2.4 was asked to do). Pick one, and say which device the benchmark numbers came from. Must stay `resolve_device()`, no new device logic.
-- **T2.5/T4.6 — score needs `[train]`**: `newsmood score` imports torch and transformers, which only the `[train]` extra installs. A plain `pip install newsmood` gets the loader but cannot score. Decide the extras split before release.
 - **T2.5**: writes scores to unscored rows (`label IS NULL`); `scored_at` must use `store._ts`. `labels` go through `output_labels()` (by name, never index).
 - **T3.2 output**: `data/store.py` holds the only `headlines` schema. `connect(settings.store.db_path)` creates it, and `upsert_headlines(conn, headlines)` returns inserted/duplicate counts. Dedupe is `UNIQUE(title_norm)`, and the first-seen row keeps its id, source, title, url, summary and `fetched_at`. `published_at` only moves earlier. Ingest never touches `label`/`confidence`/`scored_at`, and the schema checks those three are all set or all NULL. **T3.3 buckets by `published_at`.**
 - **Timestamp invariant**: stored timestamps are `YYYY-MM-DDTHH:MM:SS.ffffff+00:00`, 32 characters, UTC. The upsert compares them as strings. Anything writing timestamps must use `store._ts`.
@@ -121,7 +120,7 @@ GitHub Actions (weekdays 22:00 UTC)
 - `.gitignore`: `data/` → `data/*`, `models/` → `/models/`
 - `datasets>=4.0` dropped script loading → raw zip download, SHA-256 pinned, `PhraseBankSourceChanged` on mismatch
 - `max_length`: placeholder 192 → p95 58 → 96 with dynamic padding (measured p99 69)
-- `pytest` added as a `dev` extra; scikit-learn and `huggingface_hub>=1.32,<2` added as core dependencies; `tqdm` in `[train]`
+- `pytest` added as a `dev` extra; scikit-learn, `huggingface_hub>=1.32,<2`, torch, transformers, datasets and tqdm are core dependencies. `[train]` is empty
 - `config.py` precedence corrected to explicit > env > yaml > default, asserted in `tests/test_config.py`
 - All three candidate feeds kept. Yahoo is stale, not dead. Yahoo moved last so the dedupe tiebreak keeps richer rows. `store.db_path` added to config
 - `newsmood eval --all` writes only the marker-delimited summary table in `docs/baselines.md`

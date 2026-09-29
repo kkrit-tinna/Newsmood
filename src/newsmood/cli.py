@@ -48,7 +48,8 @@ def score(
     """Classify a headline with the fine-tuned DistilBERT model from the Hub."""
     if text is None:
         raise typer.BadParameter("pass --text; --file and scoring the SQLite store arrive in T2.5")
-    # Imported here: torch/transformers live behind the [train] extra.
+    # Imported here, not at module top: importing torch takes seconds, and
+    # `newsmood ingest` should not pay for it.
     from newsmood.models.classifier import classify, load_classifier
     from newsmood.models.loader import ensure_model
     from newsmood.training import finetune
@@ -77,8 +78,8 @@ def train(
     ),
 ):
     """Fine-tune DistilBERT on the Financial PhraseBank."""
-    # Imported here, not at module top: torch/transformers live behind the
-    # [train] extra, and `newsmood ingest` must work without them.
+    # Imported here, not at module top: importing torch takes seconds, and
+    # `newsmood ingest` should not pay for it.
     from newsmood.training import finetune
 
     if limit is not None and not dry_run:

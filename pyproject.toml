@@ -15,15 +15,20 @@ dependencies = [
     "vaderSentiment",
     "scikit-learn>=1.9,<2",
     "huggingface_hub>=1.32,<2",
+    # Scoring is the product: `newsmood score` needs torch and transformers,
+    # and every command imports datasets (via data/phrasebank.py). tqdm is
+    # imported by training/finetune.py, which `score` uses for resolve_device().
+    "torch>=2.14.0",
+    "transformers>=5.17.0",
+    "datasets>=5.0.1",
+    "tqdm>=4.70.1",
 ]
 
 [project.optional-dependencies]
-train = [
-    "torch",
-    "transformers",
-    "datasets",
-    "tqdm",
-]
+# Training-only dependencies. Empty since torch/transformers/datasets/tqdm
+# moved to core (IMPLEMENTATION_GUIDE.md §9, 2026-09-28); kept so
+# `pip install -e ".[train]"` still resolves.
+train = []
 dev = [
     "pytest",
 ]

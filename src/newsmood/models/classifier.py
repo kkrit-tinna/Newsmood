@@ -4,8 +4,8 @@ Shared by every transformer row in the eval table (fine-tuned DistilBERT,
 FinBERT). Outputs are mapped to label names through the checkpoint's own
 id2label, never by index: checkpoints disagree on order.
 
-torch/transformers are imported inside the functions: they live behind the
-[train] extra, and evaluation/suite.py imports its callers unconditionally.
+torch/transformers are imported inside the functions: importing torch takes
+seconds, and evaluation/suite.py imports this module's callers unconditionally.
 """
 
 from __future__ import annotations

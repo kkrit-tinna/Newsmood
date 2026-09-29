@@ -210,7 +210,7 @@ newsmood/
 
 ### Conventions
 
-- Python 3.11. Dependencies in `pyproject.toml`. Optional extras: `[train]` pulls torch/transformers/datasets so that a user who only wants to *run* the classifier does not install a training stack.
+- Python 3.11. Dependencies in `pyproject.toml`. torch, transformers, datasets and tqdm are core: running the classifier needs the same stack as training it, so a separate `[train]` extra saved nothing. `[train]` is kept, empty, for training-only additions. §9 Deviations 2026-09-28.
 - Config precedence: env var → `config/default.yaml` → code default. Never hardcode a threshold in a module.
 - Commit messages: `feat: distilbert-finetuning-complete`, `docs: model-card`. One commit per task, on `main`.
 - Every module gets a test. **The quality gates, the metrics, and the mood-index arithmetic must be tested**, because those are the parts that fail silently and still produce a plausible-looking report.
@@ -827,3 +827,4 @@ Append whenever reality differs. Date, task ID, what changed, why.
 | 2026-09-28 | T2.4 | Model cache is `~/.cache/newsmood` (`model.cache_dir` in config), and T4.4's "Cache `~/.cache/huggingface`" line changed to match | `models/loader.py` passes `cache_dir` to `snapshot_download`, so the model never lands in the default HF cache. Caching `~/.cache/huggingface` in Actions would cache nothing and re-download 269 MB every run. |
 | 2026-09-28 | T2.4 | T2.4 includes a single-text `newsmood score --text`, plus an unbatched `classifier.classify()` for label + confidence | T2.4's Done-when runs `newsmood score --text`, which T2.5 was meant to build. Only the one-headline path is in T2.4; `--file`, SQLite scoring, batching and `--benchmark` remain T2.5. |
 | 2026-09-28 | T2.4 | `huggingface_hub>=1.32,<2` declared as a core dependency | `models/loader.py` imports `snapshot_download`/`model_info` directly. It only arrived transitively via transformers, which is not a promise to keep shipping it. |
+| 2026-09-28 | post-T2.4 | torch>=2.14.0, transformers>=5.17.0, datasets>=5.0.1 and tqdm>=4.70.1 moved from the `[train]` extra to core dependencies. `[train]` kept, empty. §3's extras line updated | Scoring is the product, and a plain `pip install newsmood` could not run `newsmood score`: it needs torch and transformers. Moving those two alone was not enough. `cli.py` imports `LABEL_NAMES` from `data/phrasebank.py`, which imports `datasets` at module top, so without it every command failed, `ingest` and `--help` included. `score` also imports `training/finetune.py` for `resolve_device()`, which imports `tqdm`. Making `datasets`/`tqdm` lazy imports would have kept them in `[train]`, but that was a refactor, not a packaging fix. Lower bounds are the versions in `newsmood_env`. |

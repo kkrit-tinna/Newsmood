@@ -74,8 +74,9 @@ must not change the result.
 
 ## Environment
 - Python 3.11+, venv at `newsmood_env/`. Activate before running anything.
-- Dependencies in `pyproject.toml`. No `requirements.txt`. Training deps
-  (torch, transformers, datasets) live behind the `[train]` extra.
+- Dependencies in `pyproject.toml`. No `requirements.txt`. torch,
+  transformers, datasets and tqdm are core, because `newsmood score` needs
+  them. `[train]` is for training-only deps and is currently empty.
 - Thresholds, feed URLs, model revision and band cutoffs live in
   `config/default.yaml`. Never hardcode one in a module.
 - Only `data/store.py` imports `sqlite3`. `cli.py` holds no business logic.

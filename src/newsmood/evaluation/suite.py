@@ -21,7 +21,7 @@ HUMAN_CEILING_NOTE = (
     "not still leaving headroom on the table."
 )
 
-# method key -> (predict_test_split callable, requires the `[train]` extra)
+# method key -> predict_test_split callable
 _RUNS = {
     "majority_class": reference.majority_class_predict_test_split,
     "stratified_random": reference.stratified_random_predict_test_split,
