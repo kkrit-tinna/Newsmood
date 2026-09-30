@@ -17,7 +17,7 @@ SHA = "be7b809e0d8f7bd50e77d902aee199363b7e2a66"
 
 @pytest.fixture
 def cfg(tmp_path) -> ModelSettings:
-    return ModelSettings(repo_id="owner/model", revision=SHA, cache_dir=str(tmp_path / "cache"))
+    return ModelSettings(repo_id="owner/model", revision=SHA, cache_dir=str(tmp_path / "cache"), batch_size=1)
 
 
 class FakeHub:

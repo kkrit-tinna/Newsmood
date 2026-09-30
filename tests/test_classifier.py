@@ -1,6 +1,13 @@
 import pytest
 
-from newsmood.models.classifier import IncompleteCheckpoint, classify, load_classifier, output_labels, predict
+from newsmood.models.classifier import (
+    IncompleteCheckpoint,
+    classify,
+    classify_batch,
+    load_classifier,
+    output_labels,
+    predict,
+)
 
 # ProsusAI/finbert config.json at the pinned revision.
 FINBERT_ID2LABEL = {0: "positive", 1: "negative", 2: "neutral"}
@@ -59,7 +66,9 @@ def test_predict_maps_each_output_index_by_name():
     assert preds == ["positive", "negative", "neutral", "negative"]
 
 
-def test_classify_returns_label_by_name_and_softmax_confidence():
+def _scaled_fake():
+    """Fake model + tokenizer: text "i" gets logit (1 + i/10) at class i % 3, so
+    every input has its own label/confidence pair and a reordering shows."""
     torch = pytest.importorskip("torch")
 
     class Config:
@@ -75,8 +84,9 @@ def test_classify_returns_label_by_name_and_softmax_confidence():
             return self
 
         def __call__(self, input_ids, **_):
-            # Logit 2.0 at the first token id, 0 elsewhere: softmax max = e^2 / (e^2 + 2).
-            return type("Out", (), {"logits": 2.0 * torch.nn.functional.one_hot(input_ids[:, 0], num_classes=3).float()})()
+            ids = input_ids[:, 0]
+            one_hot = torch.nn.functional.one_hot(ids % 3, num_classes=3).float()
+            return type("Out", (), {"logits": one_hot * (1 + ids.float() / 10).unsqueeze(1)})()
 
     class Batch(dict):
         def to(self, device):
@@ -85,11 +95,47 @@ def test_classify_returns_label_by_name_and_softmax_confidence():
     def fake_tokenizer(texts, **_):
         return Batch(input_ids=torch.tensor([[int(t)] for t in texts]))
 
-    results = classify(["1", "2"], FakeModel(), fake_tokenizer, device="cpu")
+    return FakeModel(), fake_tokenizer
 
-    expected = torch.tensor(2.0).exp().item() / (torch.tensor(2.0).exp().item() + 2)
-    assert [label for label, _ in results] == ["negative", "neutral"]
-    assert all(c == pytest.approx(expected) for _, c in results)
+
+def test_classify_returns_label_by_name_and_softmax_confidence():
+    torch = pytest.importorskip("torch")
+    model, tokenizer = _scaled_fake()
+
+    label, confidence = classify("1", model, tokenizer, device="cpu")
+
+    # "1": logit 1.1 at index 1 -> negative; softmax max = e^1.1 / (e^1.1 + 2).
+    e = torch.tensor(1.1).exp().item()
+    assert label == "negative"
+    assert confidence == pytest.approx(e / (e + 2))
+
+
+def test_classify_batch_matches_one_at_a_time_and_keeps_order_across_a_batch_boundary():
+    model, tokenizer = _scaled_fake()
+    texts = [str(i) for i in range(33)]  # batch size 32 -> batches of 32 and 1
+
+    batched = classify_batch(texts, model, tokenizer, device="cpu", batch_size=32)
+    single = [classify(t, model, tokenizer, device="cpu") for t in texts]
+
+    assert batched == single
+    assert [label for label, _ in batched] == [FINBERT_ID2LABEL[i % 3] for i in range(33)]
+    confidences = [c for _, c in batched]
+    assert confidences[2] < confidences[5] < confidences[32]  # same class, rising logit, in input order
+
+
+def test_dynamic_padding_does_not_change_a_real_models_output(tmp_path):
+    # A real (tiny, random) DistilBERT and tokenizer: headlines of different
+    # lengths share a batch, so the short ones are padded. The attention mask
+    # must make that invisible.
+    _tiny(tmp_path, with_head=True)
+    model, tokenizer = load_classifier(str(tmp_path))
+    texts = ["up", "up up up up up", "down", "up down up", "up up"]
+
+    batched = classify_batch(texts, model, tokenizer, device="cpu", batch_size=len(texts))
+    single = [classify(t, model, tokenizer, device="cpu") for t in texts]
+
+    assert [label for label, _ in batched] == [label for label, _ in single]
+    assert [c for _, c in batched] == pytest.approx([c for _, c in single], abs=1e-5)
 
 
 def _tiny(tmp_path, with_head: bool):

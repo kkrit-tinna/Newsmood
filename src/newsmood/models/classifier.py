@@ -1,4 +1,4 @@
-"""Load a sequence classifier and run batched predict() over raw sentences.
+"""Load a sequence classifier and run batched inference over raw sentences.
 
 Shared by every transformer row in the eval table (fine-tuned DistilBERT,
 FinBERT). Outputs are mapped to label names through the checkpoint's own
@@ -46,37 +46,43 @@ def output_labels(id2label: dict[int, str]) -> list[str]:
     return names
 
 
-def predict(sentences: list[str], model, tokenizer, batch_size: int, device, max_length: int | None = None) -> list[str]:
-    """Raw sentences in, label names out. max_length=None truncates only at
-    the tokenizer's own limit."""
-    import torch
+def classify_batch(
+    texts: list[str], model, tokenizer, device, batch_size: int, max_length: int | None = None
+) -> list[tuple[str, float]]:
+    """(label, softmax confidence) per text, in input order. The one forward-pass
+    path: classify() and predict() both go through here.
 
+    Each batch is padded to its own longest row (padding=True), not to
+    max_length, so a batch of short headlines costs short-headline compute.
+    The attention mask keeps padding from changing any row's prediction.
+    max_length=None truncates only at the tokenizer's own limit.
+    """
+    import torch
     names = output_labels(model.config.id2label)
     model.to(device)
     model.eval()
-    predictions: list[str] = []
-    with torch.no_grad():
-        for start in range(0, len(sentences), batch_size):
+    results: list[tuple[str, float]] = []
+    with torch.inference_mode():
+        for start in range(0, len(texts), batch_size):
             batch = tokenizer(
-                sentences[start : start + batch_size],
+                texts[start : start + batch_size],
                 padding=True,
                 truncation=True,
                 max_length=max_length,
                 return_tensors="pt",
             ).to(device)
-            predictions += [names[i] for i in model(**batch).logits.argmax(dim=-1).tolist()]
-    return predictions
+            confidence, index = model(**batch).logits.softmax(dim=-1).max(dim=-1)
+            # .tolist() copies to the CPU, which also waits for an MPS/CUDA
+            # batch to finish, so a caller timing this call times real work.
+            results += [(names[i], c) for i, c in zip(index.tolist(), confidence.tolist())]
+    return results
 
 
-def classify(sentences: list[str], model, tokenizer, device, max_length: int | None = None) -> list[tuple[str, float]]:
-    """(label, softmax confidence) per sentence, in one unbatched forward pass.
-    For a handful of sentences (`score --text`); batching is T2.5's."""
-    import torch
+def classify(text: str, model, tokenizer, device, max_length: int | None = None) -> tuple[str, float]:
+    """(label, softmax confidence) for one headline (`score --text`)."""
+    return classify_batch([text], model, tokenizer, device, batch_size=1, max_length=max_length)[0]
 
-    names = output_labels(model.config.id2label)
-    model.to(device)
-    model.eval()
-    with torch.inference_mode():
-        batch = tokenizer(sentences, padding=True, truncation=True, max_length=max_length, return_tensors="pt").to(device)
-        confidence, index = model(**batch).logits.softmax(dim=-1).max(dim=-1)
-    return [(names[i], c) for i, c in zip(index.tolist(), confidence.tolist())]
+
+def predict(sentences: list[str], model, tokenizer, batch_size: int, device, max_length: int | None = None) -> list[str]:
+    """Raw sentences in, label names out, for the eval table."""
+    return [label for label, _ in classify_batch(sentences, model, tokenizer, device, batch_size, max_length)]

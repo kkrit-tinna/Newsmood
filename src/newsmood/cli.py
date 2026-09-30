@@ -1,3 +1,4 @@
+import json
 from contextlib import closing
 from enum import Enum
 from pathlib import Path
@@ -43,22 +44,54 @@ def ingest(
 
 @app.command()
 def score(
-    text: str = typer.Option(None, "--text", help="One headline to classify."),
+    text: str = typer.Option(None, "--text", help="One headline to classify. Prints label and confidence; writes nothing."),
+    file: Path = typer.Option(
+        None, "--file", help='JSONL with a "sentence" per line. Prints each line plus pred_label/confidence; writes nothing.'
+    ),
+    benchmark: bool = typer.Option(False, "--benchmark", help="With --file: print throughput and latency instead."),
+    device: Device = typer.Option(None, "--device", help="Default: cpu with --benchmark, otherwise auto (cuda > mps > cpu)."),
 ):
-    """Classify a headline with the fine-tuned DistilBERT model from the Hub."""
-    if text is None:
-        raise typer.BadParameter("pass --text; --file and scoring the SQLite store arrive in T2.5")
+    """Classify headlines with the fine-tuned model. With no options, score unscored rows in SQLite."""
+    if text is not None and file is not None:
+        raise typer.BadParameter("pass --text or --file, not both")
+    if benchmark and file is None:
+        raise typer.BadParameter("--benchmark needs --file")
+    
     # Imported here, not at module top: importing torch takes seconds, and
     # `newsmood ingest` should not pay for it.
-    from newsmood.models.classifier import classify, load_classifier
-    from newsmood.models.loader import ensure_model
-    from newsmood.training import finetune
+    from newsmood.models import scoring
 
     settings = get_settings()
-    device = finetune.resolve_device("auto")
-    model, tokenizer = load_classifier(str(ensure_model(settings.model)))
-    label, confidence = classify([text], model, tokenizer, device, settings.training.max_length)[0]
-    print(f"{label} {confidence:.4f}")
+    choice = device.value if device is not None else ("cpu" if benchmark else "auto")
+    try:
+        resolved = scoring.resolve_device(choice)
+    except ValueError as e:
+        raise typer.BadParameter(str(e), param_hint="--device")
+
+    if text is not None:
+        label, confidence = scoring.load_batch_classifier(settings, resolved)([text])[0]
+        print(f"{label} {confidence:.4f}")
+        return
+
+    if file is not None:
+        try:
+            records = scoring.read_jsonl(file)
+        except (OSError, scoring.InputFileError) as e:
+            raise typer.BadParameter(str(e), param_hint="--file")
+        classify = scoring.load_batch_classifier(settings, resolved)
+        if benchmark:
+            from newsmood.models.benchmark import format_benchmark, run_benchmark
+
+            texts = [r["sentence"] for r in records]
+            print(format_benchmark(run_benchmark(texts, classify, settings.model.batch_size, str(resolved))))
+            return
+        for record in scoring.score_records(records, classify):
+            print(json.dumps(record, ensure_ascii=False))
+        return
+
+    with closing(store.connect(settings.store.db_path)) as conn:
+        n = scoring.score_store(conn, lambda: scoring.load_batch_classifier(settings, resolved), settings.model.batch_size)
+    print(f"scored {n} headlines")
 
 
 @app.command()

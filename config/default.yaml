@@ -94,6 +94,9 @@ model:
   repo_id: kkrit-tinna/newsmood-distilbert-financial
   revision: be7b809e0d8f7bd50e77d902aee199363b7e2a66
   cache_dir: ~/.cache/newsmood
+  # Headlines per forward pass in `newsmood score` (T2.5). Truncation reuses
+  # training.max_length, the cap the model was trained with.
+  batch_size: 32
 
 finbert:
   # Zero-shot reference ceiling for T2.3, scored on CPU for reproducibility.

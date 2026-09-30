@@ -105,6 +105,28 @@ def upsert_headlines(conn: sqlite3.Connection, headlines: Iterable[Headline]) ->
     return UpsertResult(received=len(rows), inserted=_count(conn) - before)
 
 
+def unscored(conn: sqlite3.Connection) -> list[tuple[str, str]]:
+    """(id, title) for every row not yet scored, in a stable order. The raw
+    title, never title_norm: that is what DistilBERT sees."""
+    return [
+        (row["id"], row["title"]) for row in conn.execute("SELECT id, title FROM headlines WHERE label IS NULL ORDER BY id")
+    ]
+
+
+def write_scores(conn: sqlite3.Connection, scores: Iterable[tuple[str, str, float]], scored_at: datetime) -> int:
+    """Set label, confidence and scored_at on each (id, label, confidence), in
+    one transaction. Only unscored rows are touched, so a score never
+    overwrites an earlier one. Returns the number of rows updated."""
+    ts = _ts(scored_at)
+    rows = [(label, confidence, ts, id_) for id_, label, confidence in scores]
+    with conn:
+        before = conn.total_changes
+        conn.executemany(
+            "UPDATE headlines SET label = ?, confidence = ?, scored_at = ? WHERE id = ? AND label IS NULL", rows
+        )
+        return conn.total_changes - before
+
+
 def _count(conn: sqlite3.Connection) -> int:
     return conn.execute("SELECT count(*) FROM headlines").fetchone()[0]
 

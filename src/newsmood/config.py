@@ -85,6 +85,7 @@ class ModelSettings(BaseModel):
     repo_id: str
     revision: CommitSha
     cache_dir: str
+    batch_size: int
 
 
 class FinbertSettings(BaseModel):

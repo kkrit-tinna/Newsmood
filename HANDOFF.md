@@ -72,7 +72,8 @@ GitHub Actions (weekdays 22:00 UTC)
 
 *Last updated: Monday, Sep 28, 2026*
 
-**Status:** T1.1–T1.6, T2.1–T2.4, T3.1 and T3.2 complete. On schedule. The fine-tuned model is on the Hub at a pinned SHA, and `newsmood score --text` loads it from `~/.cache/newsmood/`, not `models/local/`.
+**Status:** T1.1–T1.6, T2.1–T2.5, T3.1 and T3.2 complete. On schedule.
+`newsmood score` works in three modes, and the live store is scored.
 
 **Numbers later tasks depend on**
 
@@ -93,12 +94,12 @@ GitHub Actions (weekdays 22:00 UTC)
 | RSS feeds | 3/3 live, in config order cnbc-finance 30, marketwatch-top 10, yahoo-finance 49 entries per fetch. Only 16 published on the T3.1 probe's US date. Yahoo lags about 43 h. See `docs/sources.md` |
 | Store, first live ingest | Sep 25: 89 rows, 89 distinct `title_norm`, 89 with `published_at`. No cross-outlet duplicates. Re-run: 0 inserted, 89 duplicates |
 | Human ceiling | qualitative only — up to 25% of annotators disagreed on every kept `75agree` row, no number fabricated |
+| Throughput (T2.5) | 164.9 headlines/s on Apple M3 Pro **CPU**, batch 32, 5 threads (~6 s per 1,000). p50/p95 6.09/6.72 ms per headline batched (7 batches only). Cold start 3.05 s, mostly imports and model load. Input: PhraseBank sentences, not live headlines. See `docs/model_card.md` |
+| Live store, first scoring | Sep 29: 112 rows, all scored on MPS. 14.3% negative · 61.6% neutral · 24.1% positive. By source (neg/neu/pos): cnbc 9/22/12, marketwatch 2/17/1, yahoo 5/30/14 |
 
 **Carry forward**
 - **T2.4 output**: `models/loader.ensure_model(settings.model)` checks the cache with `local_files_only=True`, and only on a miss calls `model_info` for the size, prints one notice to stderr, and downloads with `snapshot_download(revision=<SHA>, cache_dir=~/.cache/newsmood, token=False)`. It never reads `models/local/`. `config.py` rejects any `model.revision`/`finbert.revision` that is not a full 40-char lowercase SHA. `classifier.classify()` returns `(label, softmax confidence)`, unbatched. `newsmood score --text` works; `--file`, SQLite and `--benchmark` are T2.5.
 - **Hub README is a placeholder.** It lives only in the gitignored `models/local/README.md` and is what the Hub repo shows now. T2.6 replaces it from `docs/model_card.md`: a new upload means a new commit SHA, so bump `model.revision` in the same change.
-- **T2.5 — device conflict to settle**: the guide says "batched CPU inference", but `score` uses `finetune.resolve_device("auto")`, which is MPS on this Mac (as T2.4 was asked to do). Pick one, and say which device the benchmark numbers came from. Must stay `resolve_device()`, no new device logic.
-- **T2.5**: writes scores to unscored rows (`label IS NULL`); `scored_at` must use `store._ts`. `labels` go through `output_labels()` (by name, never index).
 - **T3.2 output**: `data/store.py` holds the only `headlines` schema. `connect(settings.store.db_path)` creates it, and `upsert_headlines(conn, headlines)` returns inserted/duplicate counts. Dedupe is `UNIQUE(title_norm)`, and the first-seen row keeps its id, source, title, url, summary and `fetched_at`. `published_at` only moves earlier. Ingest never touches `label`/`confidence`/`scored_at`, and the schema checks those three are all set or all NULL. **T3.3 buckets by `published_at`.**
 - **Timestamp invariant**: stored timestamps are `YYYY-MM-DDTHH:MM:SS.ffffff+00:00`, 32 characters, UTC. The upsert compares them as strings. Anything writing timestamps must use `store._ts`.
 - **T2.6 model card — which epoch shipped**: EarlyStopping (patience 3, min_delta 0.001) never fired: val loss fell every epoch (0.3164 → 0.2128 → 0.1941). The saved weights are epoch 3, the lowest val loss. Epoch 2 had the higher val accuracy (94.02% vs 93.44%). The card must state that epoch 3 shipped, selected on val loss, so 94.02% is never read as the published model's number.
@@ -127,8 +128,15 @@ GitHub Actions (weekdays 22:00 UTC)
 - `EarlyStopping` shallow-copy bug fixed, not ported as-is. `get_device()` order cuda > mps > cpu. T2.1 Done-when names `--device cpu`
 - T2.2 runtime: 67 s on MPS, not 20–40 min. T2.3: FinBERT relabelled "trained on PhraseBank, reference only"; Done-when six rows
 - T2.4: `hf upload`, not `huggingface-cli`. Cache `~/.cache/newsmood` (T4.4 line fixed to match). Thin `score --text` pulled into T2.4 for its Done-when
+- **T2.5 output**: bare `newsmood score` scores `label IS NULL` rows and is the only mode that writes (`store.write_scores`, guarded by `label IS NULL`, so stored labels are never overwritten). With nothing unscored it prints  "scored 0 headlines" without loading the model. `--text` and  `--file` are read-only. `--file` reads `sentence` and adds `pred_label` + `confidence`,
+  keeping the gold `label`. `--benchmark` needs `--file` and defaults to CPU; other modes default to `auto` (MPS on Apple Silicon). Batch size is
+  `model.batch_size: 32`. Code lives in `models/scoring.py` and `models/benchmark.py`.
+- **T2.6 model card — device split**: local daily scoring runs on MPS; the Actions runner will run on CPU. Confidences can differ slightly between the two. State that published reports are scored on the Actions CPU.
+- **T3.3 — live distribution, first look (n=112)**: MarketWatch is 85% neutral with 1 positive, the one source that stands out, but n=20.   
+  Yahoo's positive  share (29%) matches CNBC (28%); it's the largest source, not a skewed one.
+  The overall split resembles PhraseBank's base rates, which fits correct labels and a model echoing its training prior equally well. T3.4's hand labels separate the two. Still open for T3.3: the minimum headline count per day below which the index isn't reported (Sep 24 had 16).
 
-**Next task:** T2.5 (batched `newsmood score`: `--file`, SQLite scoring, `--benchmark`), Tue Sep 29. Settle the device question above first.
+**Next task:** T3.3, mood index, Wed Sep 30.
 
 **Schedule:** no sessions Sunday Sep 20 or Sunday Oct 4. Three Sundays are load-bearing and cannot move to a weekday: **Sep 27** (T2.1+T2.2+T2.3, the fine-tune), **Oct 11** (T3.4, hand-labeling in one sitting), **Oct 18** (T4.4 Actions + release). Full calendar in `IMPLEMENTATION_GUIDE.md` §0.5. If I fall behind, drop T3.6 (Reddit) first and T3.4 (drift analysis) last.
 
