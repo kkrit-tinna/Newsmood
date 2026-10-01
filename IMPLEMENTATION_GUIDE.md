@@ -516,20 +516,16 @@ Dedupe on **normalized title**, not URL — the same wire story appears at five 
 **Depends on:** T3.2
 **Commit:** `feat: daily-mood-index`
 
-Aggregate the day's scored headlines into one number in `[-100, +100]`:
+Aggregate a day's scored headlines into one number in `[-100, +100]`:
 
-```
-mood = 100 × Σ(wᵢ · sᵢ) / Σ(wᵢ)
-  sᵢ = +1 positive, 0 neutral, -1 negative
-  wᵢ = confidence, if ≥ threshold; else 0
-```
+    mood = 100 × Σ(confᵢ · sᵢ) / Σ(confᵢ)
+      sᵢ = +1 positive, 0 neutral, −1 negative
 
-Confidence threshold in config, default 0.60. Report the count of headlines dropped below threshold — a day where half the headlines were low-confidence is a day the index should not be trusted, and hiding that is how a dashboard lies.
+Every scored headline counts. A day is a calendar day in America/New_York.
+An empty day has mood `None`, never 0. Each stored value carries its stats (n, per-label and per-source counts, mean confidence, low-confidence count) so a thin or uncertain day is visible next to its number. Today and yesterday are recomputed on each run; older days are frozen once written.
 
-Store the daily value so reports can show a trend.
-
-**Done when:** `pytest tests/test_index.py` passes, with cases for all-positive, all-neutral, empty day, and all-below-threshold.
-
+**Done when:** `pytest tests/test_index.py` passes, with cases for
+all-positive, all-neutral, empty day, and all-low-confidence.
 ---
 
 ### T3.4 — Out-of-domain reality check
@@ -835,3 +831,11 @@ Append whenever reality differs. Date, task ID, what changed, why.
 | 2026-09-29 | T2.5 | `--file` output adds `pred_label`, not `label` | The sample input already carries the gold `label`; writing the prediction under the same key would overwrite it |
 | 2026-09-29 | T2.5 | `docs/model_card.md` created with the Performance section only | T2.5 requires recording the benchmark there. T2.6 writes the remaining sections |
 | 2026-09-29 | T2.5 | Benchmark reported for Apple M3 Pro CPU, not the guide's "2020 laptop" example; input is PhraseBank sentences | The guide's figure was illustrative. The card names the measured hardware and notes live headlines are shorter, so live throughput is likely higher |
+| 2026-09-30 | T3.3 | A day is a calendar day in `America/New_York` (config `index.timezone`), assigned by `published_at`. `day_bounds` converts local midnight on D and D+1 to UTC, and the store runs a string-range query `[start, end)` | US audience. A UTC day ends at 8pm ET and moved ~26 of 50 Sep 22–23 headlines to the wrong day. The range query relies on the fixed-width `_ts` format |
+| 2026-09-30 | T3.3 | The 0.60 confidence cutoff is dropped: every scored headline counts, weighted by its confidence. `index.low_confidence: 0.60` is kept for reporting only (`n_low_conf`) | Keeps the index based on full records. Low-confidence calls are already discounted by their weight, and the dropped rows were disproportionately positive (30% vs 13% neutral), so the cutoff shifted the mood. The uncertainty is reported, not filtered |
+| 2026-09-30 | T3.3 | No minimum headline count. Every daily value stores a stats summary: `n_headlines`, per-label counts, mean confidence, `n_low_conf`, per-source counts (JSON), `n_sources` | Suppressing thin days hides them. Showing n beside the mood makes a 1-headline day self-evident. Resolves week 2's open item 1 |
+| 2026-09-30 | T3.3 | Hybrid recompute: today and yesterday (ET) are recomputed and upserted on every run; older days are written once if missing and never rewritten | Late headlines arrive within about a day. Beyond that, a reported value stays stable |
+| 2026-09-30 | T3.3 | Only requested days are computed. Empty days return `mood=None` and are not stored | Stale Yahoo items from 2024 must not create index rows. A stored empty older day would be frozen forever and block a later backfill |
+| 2026-09-30 | T3.3 | Per-headline terms (conf·s) stored as JSON `[[id, term], ...]` in `daily_index`, along with `model_id` (`repo_id@revision`) | A frozen day's top movers (T4.2b) must come from the same snapshot as its frozen mood |
+| 2026-09-30 | T3.3 | Code in `reporting/aggregate.py`. `compute_mood` is pure and takes `low_confidence` as an argument | No DB or config access in the formula, so it's testable in isolation |
+| 2026-09-30 | T3.3 | Done-when: the all-below-threshold case is replaced by "all low-confidence rows still produce a mood" | No threshold exists to fall below |

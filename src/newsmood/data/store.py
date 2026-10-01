@@ -7,11 +7,12 @@ on the shape below, not on whatever an insert happened to create.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 from newsmood.data.feeds import Headline
 
@@ -36,6 +37,32 @@ CREATE TABLE IF NOT EXISTS headlines (
     )
 )
 """
+
+# One row per ET calendar day (T3.3), written only by reporting/aggregate.py.
+# Per-label counts are columns: the label set is fixed by the headlines CHECK,
+# and T3.5's gates and the trend query read them directly. source_counts and
+# terms are JSON text: the source set follows config, and terms is one entry
+# per headline, kept so a frozen day's top movers itemize its stored mood.
+# mood_index is NULL for a day with no scored headlines, never 0.
+DAILY_INDEX_SCHEMA = """
+CREATE TABLE IF NOT EXISTS daily_index (
+    date             TEXT PRIMARY KEY,        -- YYYY-MM-DD, calendar day in index.timezone
+    mood_index       REAL CHECK (mood_index BETWEEN -100.0 AND 100.0),
+    n_headlines      INTEGER NOT NULL,
+    n_positive       INTEGER NOT NULL,
+    n_neutral        INTEGER NOT NULL,
+    n_negative       INTEGER NOT NULL,
+    mean_confidence  REAL,
+    n_low_conf       INTEGER NOT NULL,
+    n_sources        INTEGER NOT NULL,
+    source_counts    TEXT NOT NULL,           -- JSON {source: count}
+    terms            TEXT NOT NULL,           -- JSON [[headline id, conf * s], ...]
+    model_id         TEXT NOT NULL,           -- repo_id@revision that produced the labels
+    computed_at      TEXT NOT NULL,
+    CHECK (n_headlines = n_positive + n_neutral + n_negative)
+)
+"""
+_DAILY_JSON = ("source_counts", "terms")
 
 
 # Two unique keys, two conflict paths, one rule for both: the first-seen row
@@ -127,6 +154,48 @@ def write_scores(conn: sqlite3.Connection, scores: Iterable[tuple[str, str, floa
         return conn.total_changes - before
 
 
+def scored_rows_between(conn: sqlite3.Connection, start: datetime, end: datetime) -> list[dict[str, Any]]:
+    """Scored rows with start <= published_at < end, as plain dicts.
+
+    The bounds go through _ts, so this is a string range over the fixed-width
+    UTC format (see _ts). Rows without a published_at have no day and are
+    excluded explicitly; unscored rows are left for `newsmood score`.
+    """
+    sql = """
+        SELECT id, source, label, confidence, published_at FROM headlines
+        WHERE published_at IS NOT NULL AND label IS NOT NULL
+          AND published_at >= ? AND published_at < ?
+        ORDER BY published_at, id
+    """
+    return [dict(row) for row in conn.execute(sql, (_ts(start), _ts(end)))]
+
+
+def get_daily_index(conn: sqlite3.Connection, date: str) -> dict[str, Any] | None:
+    """The stored row for one YYYY-MM-DD, JSON columns decoded, or None."""
+    row = conn.execute("SELECT * FROM daily_index WHERE date = ?", (date,)).fetchone()
+    if row is None:
+        return None
+    out = dict(row)
+    for col in _DAILY_JSON:
+        out[col] = json.loads(out[col])
+    return out
+
+
+def upsert_daily_index(conn: sqlite3.Connection, row: dict[str, Any], computed_at: datetime) -> None:
+    """Insert or replace one day's row. Whether a day may be rewritten is the
+    caller's rule (aggregate.compute_days), not the store's."""
+    values = dict(row, computed_at=_ts(computed_at))
+    for col in _DAILY_JSON:
+        values[col] = json.dumps(values[col], sort_keys=col == "source_counts")
+    cols = list(values)
+    sql = (
+        f"INSERT INTO daily_index ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))}) "
+        f"ON CONFLICT (date) DO UPDATE SET {', '.join(f'{c} = excluded.{c}' for c in cols if c != 'date')}"
+    )
+    with conn:
+        conn.execute(sql, [values[c] for c in cols])
+
+
 def _count(conn: sqlite3.Connection) -> int:
     return conn.execute("SELECT count(*) FROM headlines").fetchone()[0]
 
@@ -143,4 +212,5 @@ def connect(path: str | Path) -> sqlite3.Connection:
 
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.execute(HEADLINES_SCHEMA)
+    conn.execute(DAILY_INDEX_SCHEMA)
     conn.commit()

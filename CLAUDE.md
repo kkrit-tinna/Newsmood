@@ -9,7 +9,7 @@ done. Module layout is §3 of the guide.
 - One `T#.#` task per session. Stop when that task's **Done when** command
   passes. Do not begin the next task.
 - Do not start a task whose **Depends on** is not yet committed.
-- State the task and whether it fits 30 minutes **before** writing code.
+- State the task **before** writing code.
 - If the real data disagrees with the guide (row count, missing config,
   dead feed), update the guide in the same commit and add today's line to
   §9 Deviations. Do not work around it silently.
@@ -54,50 +54,44 @@ training split and persisted. `reporting/explain.py` loads that same
 vectorizer for distinctive terms and clustering. Never fit a second one.
 
 ## Storage
-One SQLite file at `data/newsmood.db`, not committed. Two tables:
-- `headlines` — `id` (sha256 of url), `source`, `title`, `title_norm`,
-  `summary`, `url`, `published_at`, `fetched_at`, `label`, `confidence`,
-  `scored_at`
-- `daily_index` — `date`, `mood_index`, `n_headlines`, `n_positive`,
-  `n_neutral`, `n_negative`, `n_low_conf`, `n_sources`, `model_id`,
-  `computed_at`
+One SQLite file at `data/newsmood.db`, not committed. 
+Two tables:
+`headlines` (one row per deduplicated headline, with its label) and `daily_index` (one row per non-empty ET day). 
+The schema in `data/store.py` is the source of truth for columns.
 
-`model_id` records the repo@revision that produced those labels. Without
-it, retraining silently splices two classifiers into one trend line.
-
-Dedupe on `title_norm`, not `url` — the same wire story appears at several
-outlets under several URLs.
-
-**Every stage is re-runnable.** Ingest upserts by hash, score skips labeled
-rows, aggregate replaces its row. Running a stage twice for the same date
-must not change the result.
+- `model_id` records the repo@revision behind every label and index value.
+  Without it, retraining silently splices two classifiers into one trend line.
+- Dedupe on `title_norm`, not `url`. The same wire story appears at several
+  outlets under several URLs.
+- Timestamps are stored UTC via `store._ts` (fixed width). Day ranges are
+  string comparisons and depend on that format.
+- A day is a calendar day in America/New_York via zoneinfo. Never
+  `date.today()` or a fixed UTC offset; the Actions runner's clock is UTC.
 
 ## Environment
 - Python 3.11+, venv at `newsmood_env/`. Activate before running anything.
-- Dependencies in `pyproject.toml`. No `requirements.txt`. torch,
-  transformers, datasets and tqdm are core, because `newsmood score` needs
-  them. `[train]` is for training-only deps and is currently empty.
-- Thresholds, feed URLs, model revision and band cutoffs live in
-  `config/default.yaml`. Never hardcode one in a module.
-- Only `data/store.py` imports `sqlite3`. `cli.py` holds no business logic.
-  `template.py` performs no arithmetic.
-- The model loads from the HF Hub at a **pinned revision**, cached under
-  `~/.cache/newsmood/`. Never load from `main`.
+- Dependencies in `pyproject.toml`; no `requirements.txt`. Anything `newsmood score` needs is a core dependency. `[train]` holds
+  training-only deps.
+- Thresholds, feed URLs, model revision and band cutoffs live in `config/default.yaml`. Never hardcode one in a module.
+- The model loads from the HF Hub at a **pinned revision**, cached under `~/.cache/newsmood/`. Never load from `main`.
+- CLI results go to stdout; notices, progress and warnings go to stderr. Output must stay safe to pipe or redirect.
 
 ## Testing
-- No test calls the Anthropic API. `reporting/claude.py` takes an
-  injectable client; tests pass a fake.
+- No test calls the Anthropic API or downloads the model. Inject fakes
+  (`reporting/claude.py` takes a client; scoring takes a classifier).
 - Gates, metrics and mood-index arithmetic must be tested. Those are the
   parts that fail silently and still produce a plausible report.
 
 ## Git
+- Do not commit. The user reviews the diff and commits.
+- Do not edit HANDOFF.md or update past §9 entries of IMPLEMENTATION_GUIDE.md unless asked; the user does close-out after review. 
+  Edit IMPLEMENTATION_GUIDE.md when real data contradicts it (Session rules), and add entries in §9 when there is deviation.
 - One commit per task, on `main`, message format `feat: rss-ingest` or
   `docs: model-card`.
 - Never commit anything under `data/` except `data/sample/`, and never
   `models/`, `.env`, or `*.db`.
-- `reports/` **is** committed — the daily output is the visible evidence
-  the pipeline runs.
-- Update `HANDOFF.md` §Where I am at the end of every session.
+- One-line commit subjects only, e.g. `feat: rss-ingest`, `docs: model-card`.
+- `reports/` **is** committed — the daily output is the visible evidence the pipeline runs.
 
 ## Scope
 No web service, no cloud infrastructure, no Docker, no streaming, no ticker

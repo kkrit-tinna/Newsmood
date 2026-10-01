@@ -94,6 +94,11 @@ class FinbertSettings(BaseModel):
     batch_size: int
 
 
+class IndexSettings(BaseModel):
+    timezone: str
+    low_confidence: float
+
+
 class YamlConfigSource(PydanticBaseSettingsSource):
     """Reads config/default.yaml as a settings layer, below env vars."""
 
@@ -127,6 +132,7 @@ class Settings(BaseSettings):
     training: TrainingSettings
     model: ModelSettings
     finbert: FinbertSettings
+    index: IndexSettings
 
     @classmethod
     def settings_customise_sources(

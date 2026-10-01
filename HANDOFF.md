@@ -70,10 +70,10 @@ GitHub Actions (weekdays 22:00 UTC)
 
 ## Where I am right now
 
-*Last updated: Monday, Sep 28, 2026*
+*Last updated: Wednesday, Sep 30, 2026*
 
-**Status:** T1.1–T1.6, T2.1–T2.5, T3.1 and T3.2 complete. On schedule.
-`newsmood score` works in three modes, and the live store is scored.
+**Status:** T1.1–T1.6, T2.1–T2.5 and T3.1–T3.3 complete. On schedule.
+The daily mood index computes and stores per ET day.
 
 **Numbers later tasks depend on**
 
@@ -116,6 +116,10 @@ GitHub Actions (weekdays 22:00 UTC)
 - **`docs/baselines.md` VADER wording** — the "Why no threshold fixes either" heading and "the class direction blindness breaks" (line ~202) still assume one mechanism; the line-155 CLAIM splits negative errors into direction blindness (23) and missing vocabulary (15). Update both.
 - **T1.6 output** — `docs/baselines.md` §Analysis carries interpretive sentences wrapped in `<!-- CLAIM: ... -->` (`grep CLAIM:` to review).
 - **T4.5 README** — the training section must note that `PYTORCH_ENABLE_MPS_FALLBACK=1` routes unimplemented MPS operators to CPU. Docs only.
+- **T4.2 — missing day ≠ 0**: empty days aren't stored, so the trend line must  show a missing date as "no data," never plot it as 0. Print the mood with its n and stats beside it, e.g. "+100 · 1 headline · mean conf 0.71".
+- **T4.3 — "today" comes from America/New_York**, never `date.today()`. The Actions runner's clock is UTC, so `date.today()` rolls over at 8pm ET and would request the wrong days. Confirm `compute_days`' default clock uses ET.
+- **T3.5 — Yahoo is stale**: nothing newer than Sep 23 as of Sep 30. The index currently runs on CNBC and MarketWatch only. Decide whether Yahoo stays.
+- **T4.4 — ingest several times a day**: one fetch captures ~3 h of MarketWatch, so ingest days are dominated by its 10-item burst (85% neutral, pulling toward 0). Ingest every 4–6 h; score and index once. Ingest is idempotent, so repeat runs cost nothing.
 
 **Deviations so far** — full entries in `IMPLEMENTATION_GUIDE.md` §9
 - `.gitignore`: `data/` → `data/*`, `models/` → `/models/`
@@ -134,7 +138,7 @@ GitHub Actions (weekdays 22:00 UTC)
 - **T2.6 model card — device split**: local daily scoring runs on MPS; the Actions runner will run on CPU. Confidences can differ slightly between the two. State that published reports are scored on the Actions CPU.
 - **T3.3 — live distribution, first look (n=112)**: MarketWatch is 85% neutral with 1 positive, the one source that stands out, but n=20.   
   Yahoo's positive  share (29%) matches CNBC (28%); it's the largest source, not a skewed one.
-  The overall split resembles PhraseBank's base rates, which fits correct labels and a model echoing its training prior equally well. T3.4's hand labels separate the two. Still open for T3.3: the minimum headline count per day below which the index isn't reported (Sep 24 had 16).
+  The overall split resembles PhraseBank's base rates, which fits correct labels and a model echoing its training prior equally well. T3.4's hand labels separate the two.
 
 **Next task:** T3.3, mood index, Wed Sep 30.
 

@@ -94,6 +94,7 @@ def _write_yaml_config(path: Path) -> None:
                 },
                 "model": {"repo_id": "yaml/model", "revision": _YAML_SHA, "cache_dir": "yaml-cache", "batch_size": 1},
                 "finbert": {"repo_id": "yaml/finbert", "revision": _YAML_SHA, "batch_size": 1},
+                "index": {"timezone": "America/New_York", "low_confidence": 0.6},
             }
         )
     )
