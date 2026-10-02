@@ -114,3 +114,26 @@ index:
   # Informational only: rows below this confidence are counted in
   # n_low_conf and still weighted into the mood by their confidence.
   low_confidence: 0.60
+
+lede_bands:
+  # Strength word for the report header (T4.2) and the lede (T4.2b), applied
+  # to |mood| as displayed (1 decimal). Each bound is exclusive: |mood| < flat
+  # is "roughly flat", < mild "mildly", < moderate "moderately", else "strongly".
+  flat: 5
+  mild: 15
+  moderate: 35
+
+report:
+  # Recommended articles (T4.2): top-k headlines per sentiment by model
+  # certainty. Ranks certainty, not importance; the section header says so.
+  recommended:
+    negative: 3
+    positive: 3
+    neutral: 2
+  # Pie slice colors, one per sentiment (Okabe-Ito, colorblind-safe; no
+  # red/green pair). report_data.py attaches each to its slice so a color
+  # follows the sentiment, never the slice's position.
+  colors:
+    negative: "#D55E00"
+    positive: "#0072B2"
+    neutral: "#999999"

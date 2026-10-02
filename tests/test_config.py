@@ -95,6 +95,11 @@ def _write_yaml_config(path: Path) -> None:
                 "model": {"repo_id": "yaml/model", "revision": _YAML_SHA, "cache_dir": "yaml-cache", "batch_size": 1},
                 "finbert": {"repo_id": "yaml/finbert", "revision": _YAML_SHA, "batch_size": 1},
                 "index": {"timezone": "America/New_York", "low_confidence": 0.6},
+                "lede_bands": {"flat": 5, "mild": 15, "moderate": 35},
+                "report": {
+                    "recommended": {"negative": 3, "positive": 3, "neutral": 2},
+                    "colors": {"negative": "#000001", "positive": "#000002", "neutral": "#000003"},
+                },
             }
         )
     )

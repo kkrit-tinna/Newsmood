@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import yaml
-from pydantic import AfterValidator, BaseModel
+from pydantic import AfterValidator, BaseModel, StringConstraints
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "default.yaml"
@@ -99,6 +99,32 @@ class IndexSettings(BaseModel):
     low_confidence: float
 
 
+class LedeBandsSettings(BaseModel):
+    flat: float
+    mild: float
+    moderate: float
+
+
+class RecommendedSettings(BaseModel):
+    negative: int
+    positive: int
+    neutral: int
+
+
+HexColor = Annotated[str, StringConstraints(pattern=r"^#[0-9A-Fa-f]{6}$")]
+
+
+class SentimentColors(BaseModel):
+    negative: HexColor
+    positive: HexColor
+    neutral: HexColor
+
+
+class ReportSettings(BaseModel):
+    recommended: RecommendedSettings
+    colors: SentimentColors
+
+
 class YamlConfigSource(PydanticBaseSettingsSource):
     """Reads config/default.yaml as a settings layer, below env vars."""
 
@@ -133,6 +159,8 @@ class Settings(BaseSettings):
     model: ModelSettings
     finbert: FinbertSettings
     index: IndexSettings
+    lede_bands: LedeBandsSettings
+    report: ReportSettings
 
     @classmethod
     def settings_customise_sources(

@@ -52,7 +52,7 @@ Tasks are listed in §4–§7 in **dependency order**. They are *executed* in th
 | Thu Oct 1 | T4.2 report template | |
 | **Fri Oct 2** | **T4.3 first offline report** | **← milestone** |
 | ~~Sun Oct 4~~ | — | *off* |
-| Mon Oct 5 | T4.2b Why section, part 1 | contributors + source skew |
+| Mon Oct 5 | T4.2b Why section, part 1 | contribution % + source skew + lede scaffold |
 | Tue Oct 6 | T4.2b Why section, part 2 | distinctive terms + clusters |
 | Wed Oct 7 | T3.5 quality gates | |
 | Thu Oct 8 | T2.6 model card | |
@@ -179,7 +179,9 @@ newsmood/
 │   │   └── store.py            # SQLite schema + upsert + query
 │   ├── models/
 │   │   ├── loader.py           # HF Hub download, cache, version pin
-│   │   └── classifier.py       # batched predict()
+│   │   ├── classifier.py       # classify_batch(), classify()
+│   │   ├── scoring.py          # the three `score` modes (T2.5)
+│   │   └── benchmark.py        # --benchmark timing (T2.5)
 │   ├── baselines/
 │   │   ├── vader.py
 │   │   ├── logreg.py
@@ -193,7 +195,8 @@ newsmood/
 │   │   ├── aggregate.py         # mood index arithmetic
 │   │   ├── claude.py           # Anthropic client, retry, cost log
 │   │   ├── explain.py          # computed lede + Why blocks (T4.2b)
-│   │   └── template.py         # markdown assembly
+│   │   ├── report_data.py      # day → finished report numbers (T4.2)
+│   │   └── template.py         # markdown assembly, no arithmetic
 │   └── training/
 │       ├── dataset.py          # ported: SentimentDataset
 │       └── finetune.py
@@ -526,6 +529,7 @@ An empty day has mood `None`, never 0. Each stored value carries its stats (n, p
 
 **Done when:** `pytest tests/test_index.py` passes, with cases for
 all-positive, all-neutral, empty day, and all-low-confidence.
+
 ---
 
 ### T3.4 — Out-of-domain reality check
@@ -547,7 +551,7 @@ Publishing the number that makes your model look worse is what separates this fr
 ---
 
 ### T3.5 — Quality gates
-**Depends on:** T3.4
+**Depends on:** T3.3
 **Commit:** `feat: quality-gates`
 
 `evaluation/gates.py`. Each gate returns pass/fail plus the observed value. **A failing gate aborts before the Claude call and before the report is written.** A pipeline that publishes a confident report from three headlines is worse than one that stops.
@@ -609,29 +613,46 @@ This task creates `.env.example` — a committed file holding the variable *name
 ---
 
 ### T4.2 — Report template
-**Depends on:** T4.1
+**Depends on:** T3.3
 **Commit:** `feat: report-template`
 
-Deterministic markdown assembled in `reporting/template.py`, with exactly one Claude-generated section inside it:
+Deterministic markdown in two layers. `reporting/report_data.py`'s `build_report_data()` is pure: it takes the day's `DayResult` (T3.3) and the day's scored rows and returns one immutable object holding every finished number: shares, certainty %, band, counts, orderings and shortfall flags. `reporting/template.py` renders that object and does no arithmetic. Only rows whose ids are in the index snapshot's `terms` are shown, so a frozen day's report matches its frozen mood. Later rows for that date are excluded and counted, and a stored id with no row raises.
 
 ```markdown
-# Newsmood — {date}
+# Newsmood — {date, ET}
 
-**Mood index: {score:+.1f}**  ({label})   {n} headlines from {k} sources
+**Mood index: {mood:+.1f}** ({band}) · {n} headlines from {k} sources · model unsure on {n_unsure}
+{if n_late: "_{n_late} later headlines for this date arrived after its index was frozen and are not counted._"}
 
-| Sentiment | Count | Share |
-...
+## Mood at a glance
+{mermaid pie of the non-zero sentiments, count desc, colored from report.colors; then one line naming all three: count (share %)}
 
 ## What happened
-{claude narrative — 150-200 words}
+{offline: fixed placeholder line. T4.2b's lede replaces it; T4.1's narrative replaces the lede}
 
-## Headlines
-| Sentiment | Conf | Headline | Source |
-...
+## Recommended articles (highest model certainty, not most important)
+{per sentiment, top headlines by confidence: report.recommended = 3 negative, 3 positive, 2 neutral.
+ Each: [title](url) · certainty % · source. Fewer than requested → "only 2 today"}
+
+## Sources
+| Source | Headlines | Negative | Neutral | Positive |     ← total desc, then name
+
+<details><summary>All {n} headlines</summary>
+| Sentiment | Certainty | Headline | Source |          ← negative, positive, neutral; confidence desc
+</details>
 
 ---
-Model: {model_id}@{revision} · Gates: {passed}/{total} · Not financial advice.
+Certainty is the model's confidence in its label; below {low_confidence %} the model is unsure.
+Links go to the original publisher; some limit free articles.
+Model: {model_id} · Gates: not yet implemented · Not financial advice.
 ```
+
+- **Band**: `lede_bands` (shared with T4.2b), applied to the displayed 1-decimal mood with exclusive upper bounds: |mood| < 5 "roughly flat", < 15 "mildly", < 35 "moderately", else "strongly", plus positive/negative.
+- **Rounding**: half-up on the decimal value everywhere (0.955 → 96%; 6.25% → 6.3%).
+- **Order**: confidence desc, then `published_at`, then id, so re-running a day gives a byte-identical report.
+- **Links**: urls pass through unchanged. A missing url, or one that is not http(s) with a host, renders the title as plain text. A missing source shows as "unknown". Nothing is fetched, and paywalls are not detected.
+- **Empty day**: mood and band are `None`, never 0, and every section is empty. The template prints "no headlines for this date".
+- Escaping is `template.py`'s job, not the builder's: titles and sources are backslash-escaped, and urls go in the `<...>` link form. `|` is escaped in both, so table rows can't split.
 
 Counts, tables, and the index are computed in Python, never asked of the model. Ask a language model to add up a column and it will sometimes be wrong, silently, in a document that looks authoritative.
 
@@ -655,7 +676,7 @@ The footer's model id and revision are what make a report from six weeks ago int
 **Depends on:** T4.3
 **Commit:** `feat: computed-explanation-section`
 
-Turns the report from a table into something a reader can act on, **with no API call**. Everything here is arithmetic over artifacts that already exist.
+In the report, the lede replaces the offline placeholder under "What happened". If T4.1 is built, the Claude narrative replaces the lede there.
 
 Five blocks in `reporting/explain.py`. **Block 0 is written last**, because it composes from the other four.
 
@@ -702,17 +723,17 @@ Keep a small phrase bank (2–3 variants per slot, chosen by hash of the date) s
 
 ---
 
-**1. Top movers, both directions.** Each headline's term in the weighted sum from T3.3, as a percentage of the day's total movement. This is not a new computation — it is the index, itemized.
+**1. Contribution, added to Recommended articles.** T4.2 already lists the top negative and positive headlines by certainty. Within a sentiment that is the same ranking as contribution to the index, since each term is conf × s and |s| = 1. This block adds each item's share of the day's
+total movement: conf / Σ|confᵢ·sᵢ| over non-neutral headlines, computed from the terms stored in `daily_index` (T3.3). Neutral items keep certainty only, since their contribution is 0.
 
-**Show the top 3 negative and the top 3 positive as separate blocks, always, even on a lopsided day.** Ranking by absolute contribution alone would fill all five slots with one side on most days, and a reader scanning before the open needs both: what is dragging, and what is holding up. On a day with no positive headlines at all, print "no positive headlines above the confidence threshold" rather than omitting the block — an absent section and an empty one mean different things.
-
-⚠️ **Label this by what it is: most confidently classified, not most important.** The model scores tone, not market significance. A 0.97-confidence headline about a small-cap is not more consequential than a 0.71-confidence headline about the Fed, and the ranking cannot tell them apart. Put that caveat in the section header, not in a footnote — it is the most likely way a reader will misuse this report.
+When a sentiment has no headlines, print "no positive headlines today" rather than omitting the block. An absent section and an empty one mean
+different things. The section header keeps its caveat: highest model certainty, not most important.
 
 **2. Distinctive terms.** Reuse the **T1.4 TF-IDF vectorizer**. Score today's negative headlines against a trailing 30-day background and surface the terms that stand out. The baseline you built in Week 1 earns a second job here.
 
 **3. Clusters.** Cosine similarity on the same TF-IDF vectors, agglomerative, distance threshold in config. For each cluster: size, sentiment split, and share of the day's tilt.
 
-**4. Source skew.** Share of negative headlines from the single most represented outlet. A day where one wire dominates is a day the index reflects one newsroom.
+**4. Source skew.** Share of negative headlines from the single most represented outlet. A day where one wire dominates is a day the index reflects one newsroom. Rendered as one line under T4.2's Sources table, not a separate section.
 
 ⚠️ **Say when there is nothing to say.** At ~47 headlines a day, distinctive-term extraction is noisy and clustering is coarse. Each block needs a floor — minimum headlines, minimum cluster size, minimum term lift — and prints an explicit "no clear theme today" when unmet. **Manufacturing a theme from four headlines is worse than printing nothing**, because the reader cannot tell the difference and will believe it.
 
@@ -839,3 +860,15 @@ Append whenever reality differs. Date, task ID, what changed, why.
 | 2026-09-30 | T3.3 | Per-headline terms (conf·s) stored as JSON `[[id, term], ...]` in `daily_index`, along with `model_id` (`repo_id@revision`) | A frozen day's top movers (T4.2b) must come from the same snapshot as its frozen mood |
 | 2026-09-30 | T3.3 | Code in `reporting/aggregate.py`. `compute_mood` is pure and takes `low_confidence` as an argument | No DB or config access in the formula, so it's testable in isolation |
 | 2026-09-30 | T3.3 | Done-when: the all-below-threshold case is replaced by "all low-confidence rows still produce a mood" | No threshold exists to fall below |
+| 2026-10-02 | T4.2 | **Depends on** changed from T4.1 to T3.3 | T4.3 builds offline first and states T4.1 is not a dependency. The template needs only the index and stored headlines. The stale T4.1 dependency conflicted with the CLAUDE.md rule against starting a task whose dependency is uncommitted |
+| 2026-10-02 | T3.5 | **Depends on** changed from T3.4 to T3.3 | T3.5 is scheduled Oct 7, before T3.4 on Oct 11. Gates need only stored data. T3.4's drift results can inform threshold values afterward, which live in config, so tuning them is not a rebuild |
+| 2026-10-02 | T4.2 | Footer prints `Gates: not yet implemented` until T3.5 lands | T3.5 isn't built, so there is no passed/total to report. A fabricated or blank count would misstate what was checked |
+| 2026-10-02 | T4.2 | Footer prints `model_id` alone, not `{model_id}@{revision}` | `daily_index.model_id` already stores `repo_id@revision`, so the guide's format would print the revision twice |
+| 2026-10-02 | T4.2b | Block 1 (top movers) folded into T4.2's Recommended articles as a contribution % column; lede placed under "What happened"; source skew rendered under the Sources table | Within a sentiment, ranking by contribution equals ranking by confidence (term = conf × s, \|s\| = 1), so a separate movers section would repeat the same headlines. The T4.2 redesign already has a slot for each block |
+| 2026-10-02 | T4.2 | Report layout redesigned: header line, a sentiment pie instead of the count/share table, a placeholder "What happened", Recommended articles, a per-source table, the full headline list collapsed in `<details>`, and a footer with certainty legend, publisher line, model id and gates | A full table up top buries the evidence; the recommended slots and source table give T4.2b's blocks a place to land. Numbers come from a pure `reporting/report_data.py` so `template.py` does no arithmetic |
+| 2026-10-02 | T4.2 | Header band reuses T4.2b's `lede_bands` (5/15/35, exclusive upper bounds), applied to the displayed 1-decimal mood | One set of cutoffs for header and lede, so they can't disagree. Banding the rounded value keeps "+5.0" from reading "roughly flat" |
+| 2026-10-02 | T4.2 | An empty day renders "no headlines for this date": mood and band `None`, all sections empty | Mood is `None`, never 0 (T3.3). Printing 0 or an empty table would read as a balanced day |
+| 2026-10-02 | T4.2 | Recommended sample sizes in config: `report.recommended` = 3 negative, 3 positive, 2 neutral. A shortfall is flagged, not padded | CLAUDE.md: no thresholds in modules. A short group shows what exists plus "only N today" |
+| 2026-10-02 | T4.2 | Headlines link to the original article. Footer: "Links go to the original publisher; some limit free articles." Non-http(s) or missing urls render as plain text. Paywalls are deliberately not detected | Detection would mean fetching article pages, which is outside scope and adds network calls to an offline report. The footer line sets expectations instead |
+| 2026-10-02 | T4.2 | Rows for a date that aren't in the stored `terms` are excluded from the report and counted in a note under the header, instead of failing | A late headline can arrive for a frozen older day. Raising would make `report --date` fail for that day forever; including it would show a pie that disagrees with the frozen mood |
+| 2026-10-02 | T4.2 | Pie colors set per sentiment in `report.colors` (Okabe-Ito: negative #D55E00, positive #0072B2, neutral #999999). The theme's `pie1..pieN` list holds only the drawn slices, in drawn order, and slices are drawn count desc (ties in sentiment order) | Mermaid assigns colors by slice position, so dropping a zero slice shifted every later color onto the wrong sentiment. Current Mermaid colors in declaration order, older versions sorted by value first. Count-desc order makes the two agree |
