@@ -70,10 +70,11 @@ GitHub Actions (weekdays 22:00 UTC)
 
 ## Where I am right now
 
-*Last updated: Wednesday, Sep 30, 2026*
+*Last updated: Friday, Oct 2, 2026*
 
-**Status:** T1.1–T1.6, T2.1–T2.5 and T3.1–T3.3 complete. On schedule.
-The daily mood index computes and stores per ET day.
+**Status:** T1.1–T1.6, T2.1–T2.5, T3.1–T3.3, T4.2 and T4.3 complete.
+**Milestone reached: first offline report** (`reports/2026-10-02.md`),
+on the target date, with no API key.
 
 **Numbers later tasks depend on**
 
@@ -96,51 +97,9 @@ The daily mood index computes and stores per ET day.
 | Human ceiling | qualitative only — up to 25% of annotators disagreed on every kept `75agree` row, no number fabricated |
 | Throughput (T2.5) | 164.9 headlines/s on Apple M3 Pro **CPU**, batch 32, 5 threads (~6 s per 1,000). p50/p95 6.09/6.72 ms per headline batched (7 batches only). Cold start 3.05 s, mostly imports and model load. Input: PhraseBank sentences, not live headlines. See `docs/model_card.md` |
 | Live store, first scoring | Sep 29: 112 rows, all scored on MPS. 14.3% negative · 61.6% neutral · 24.1% positive. By source (neg/neu/pos): cnbc 9/22/12, marketwatch 2/17/1, yahoo 5/30/14 |
+| First offline report (T4.3) | Oct 2: 14 headlines, negative/neutral/positive 7/5/2, mood <MOOD>. Built from live RSS with ANTHROPIC_API_KEY unset. A back-to-back re-run was byte-identical, label counts sum to n, and the header mood matches `daily_index`. `daily_index` holds real rows from Oct 1–2 onward |
 
-**Carry forward**
-- **T2.4 output**: `models/loader.ensure_model(settings.model)` checks the cache with `local_files_only=True`, and only on a miss calls `model_info` for the size, prints one notice to stderr, and downloads with `snapshot_download(revision=<SHA>, cache_dir=~/.cache/newsmood, token=False)`. It never reads `models/local/`. `config.py` rejects any `model.revision`/`finbert.revision` that is not a full 40-char lowercase SHA. `classifier.classify()` returns `(label, softmax confidence)`, unbatched. `newsmood score --text` works; `--file`, SQLite and `--benchmark` are T2.5.
-- **Hub README is a placeholder.** It lives only in the gitignored `models/local/README.md` and is what the Hub repo shows now. T2.6 replaces it from `docs/model_card.md`: a new upload means a new commit SHA, so bump `model.revision` in the same change.
-- **T3.2 output**: `data/store.py` holds the only `headlines` schema. `connect(settings.store.db_path)` creates it, and `upsert_headlines(conn, headlines)` returns inserted/duplicate counts. Dedupe is `UNIQUE(title_norm)`, and the first-seen row keeps its id, source, title, url, summary and `fetched_at`. `published_at` only moves earlier. Ingest never touches `label`/`confidence`/`scored_at`, and the schema checks those three are all set or all NULL. **T3.3 buckets by `published_at`.**
-- **Timestamp invariant**: stored timestamps are `YYYY-MM-DDTHH:MM:SS.ffffff+00:00`, 32 characters, UTC. The upsert compares them as strings. Anything writing timestamps must use `store._ts`.
-- **T2.6 model card — which epoch shipped**: EarlyStopping (patience 3, min_delta 0.001) never fired: val loss fell every epoch (0.3164 → 0.2128 → 0.1941). The saved weights are epoch 3, the lowest val loss. Epoch 2 had the higher val accuracy (94.02% vs 93.44%). The card must state that epoch 3 shipped, selected on val loss, so 94.02% is never read as the published model's number.
-- **T2.6 model card — FinBERT is not a ceiling**: ProsusAI/finbert was fine-tuned on Financial PhraseBank, very likely including many of our test sentences, and the overlap can't be measured (no published split). The card must not present it as a zero-shot ceiling or read the gap to DistilBERT as headroom. Label it "trained on PhraseBank, reference only", as `docs/baselines.md` does.
-- **T2.6 model card — MPS reproducibility**: the published run trained on MPS. Seeds are fixed, but MPS kernel scheduling is nondeterministic, so results are reproducible in substance and not bit-identical. Exact reproduction requires `--device cpu`. The card must say which device the published run used (`device` in `history.json`).
-- **T2.6 model card — dedupe discards syndication count (T3.2)**: `UNIQUE(title_norm)` collapses one wire story run by five outlets into one row. Accepted trade: without it the index overweights whatever the wires ran. State it in the card.
-- **Still open from T2.3**: check DistilBERT against LogReg's four named failure types on the same test rows (object-dependent direction "errors fell", boilerplate "second quarter of", lone financial nouns, negation scope "not quite cheap"). `docs/baselines.md` has the confusion matrix but not this row-level check.
-- **Empty summaries, mitigated but not eliminated**: Yahoo is last in feed order, so a story shared with CNBC or MarketWatch keeps their summary. Stories only Yahoo carries still have none.
-- **T3.3/T3.5**: Yahoo serves stale items, 4 of 49 from 2024-11 to 2026-09-22. Bucket by `published_at`, not `fetched_at`. If Yahoo's lag persists, T3.5 decides whether to gate it or drop it.
-- **T4.2b/T4.4** — `/models/` is gitignored, so the Actions runner won't have the fitted TF-IDF vectorizer (`models/baselines/`). Decide on Oct 5: refit in CI from the pinned split, commit the joblib file, or publish to the Hub. T4.4 caches `~/.cache/newsmood`, keyed on `model.revision`.
-- **T1.5 output** — `newsmood eval --all` writes the summary table into `docs/baselines.md` between `<!-- eval:summary:start/end -->` markers; T3.5's gates read from the same table shape.
-- **`perform_cross_validation()` is still unported.** §3's reuse table maps it to `evaluation/metrics.py`, but no task's Done-when requires it. Assign it to a task in the guide or drop it from §3.
-- **Lexicon facts in T1.3 prose are partly wrong.** `docs/baselines.md` §Why it fails and the guide's T1.3 block say VADER has no "liability" entry and reads "aggressive growth" as negative; measured: "liability" is −0.8 (compound −0.2023 alone), "aggressive growth" scores +0.25. Needs a guide edit + §9 line.
-- **`docs/baselines.md` VADER wording** — the "Why no threshold fixes either" heading and "the class direction blindness breaks" (line ~202) still assume one mechanism; the line-155 CLAIM splits negative errors into direction blindness (23) and missing vocabulary (15). Update both.
-- **T1.6 output** — `docs/baselines.md` §Analysis carries interpretive sentences wrapped in `<!-- CLAIM: ... -->` (`grep CLAIM:` to review).
-- **T4.5 README** — the training section must note that `PYTORCH_ENABLE_MPS_FALLBACK=1` routes unimplemented MPS operators to CPU. Docs only.
-- **T4.2 — missing day ≠ 0**: empty days aren't stored, so the trend line must  show a missing date as "no data," never plot it as 0. Print the mood with its n and stats beside it, e.g. "+100 · 1 headline · mean conf 0.71".
-- **T4.3 — "today" comes from America/New_York**, never `date.today()`. The Actions runner's clock is UTC, so `date.today()` rolls over at 8pm ET and would request the wrong days. Confirm `compute_days`' default clock uses ET.
-- **T3.5 — Yahoo is stale**: nothing newer than Sep 23 as of Sep 30. The index currently runs on CNBC and MarketWatch only. Decide whether Yahoo stays.
-- **T4.4 — ingest several times a day**: one fetch captures ~3 h of MarketWatch, so ingest days are dominated by its 10-item burst (85% neutral, pulling toward 0). Ingest every 4–6 h; score and index once. Ingest is idempotent, so repeat runs cost nothing.
-
-**Deviations so far** — full entries in `IMPLEMENTATION_GUIDE.md` §9
-- `.gitignore`: `data/` → `data/*`, `models/` → `/models/`
-- `datasets>=4.0` dropped script loading → raw zip download, SHA-256 pinned, `PhraseBankSourceChanged` on mismatch
-- `max_length`: placeholder 192 → p95 58 → 96 with dynamic padding (measured p99 69)
-- `pytest` added as a `dev` extra; scikit-learn, `huggingface_hub>=1.32,<2`, torch, transformers, datasets and tqdm are core dependencies. `[train]` is empty
-- `config.py` precedence corrected to explicit > env > yaml > default, asserted in `tests/test_config.py`
-- All three candidate feeds kept. Yahoo is stale, not dead. Yahoo moved last so the dedupe tiebreak keeps richer rows. `store.db_path` added to config
-- `newsmood eval --all` writes only the marker-delimited summary table in `docs/baselines.md`
-- `EarlyStopping` shallow-copy bug fixed, not ported as-is. `get_device()` order cuda > mps > cpu. T2.1 Done-when names `--device cpu`
-- T2.2 runtime: 67 s on MPS, not 20–40 min. T2.3: FinBERT relabelled "trained on PhraseBank, reference only"; Done-when six rows
-- T2.4: `hf upload`, not `huggingface-cli`. Cache `~/.cache/newsmood` (T4.4 line fixed to match). Thin `score --text` pulled into T2.4 for its Done-when
-- **T2.5 output**: bare `newsmood score` scores `label IS NULL` rows and is the only mode that writes (`store.write_scores`, guarded by `label IS NULL`, so stored labels are never overwritten). With nothing unscored it prints  "scored 0 headlines" without loading the model. `--text` and  `--file` are read-only. `--file` reads `sentence` and adds `pred_label` + `confidence`,
-  keeping the gold `label`. `--benchmark` needs `--file` and defaults to CPU; other modes default to `auto` (MPS on Apple Silicon). Batch size is
-  `model.batch_size: 32`. Code lives in `models/scoring.py` and `models/benchmark.py`.
-- **T2.6 model card — device split**: local daily scoring runs on MPS; the Actions runner will run on CPU. Confidences can differ slightly between the two. State that published reports are scored on the Actions CPU.
-- **T3.3 — live distribution, first look (n=112)**: MarketWatch is 85% neutral with 1 positive, the one source that stands out, but n=20.   
-  Yahoo's positive  share (29%) matches CNBC (28%); it's the largest source, not a skewed one.
-  The overall split resembles PhraseBank's base rates, which fits correct labels and a model echoing its training prior equally well. T3.4's hand labels separate the two.
-
-**Next task:** T3.3, mood index, Wed Sep 30.
+**Next task:** T4.2b, Why section part 1, Mon Oct 5.
 
 **Schedule:** no sessions Sunday Sep 20 or Sunday Oct 4. Three Sundays are load-bearing and cannot move to a weekday: **Sep 27** (T2.1+T2.2+T2.3, the fine-tune), **Oct 11** (T3.4, hand-labeling in one sitting), **Oct 18** (T4.4 Actions + release). Full calendar in `IMPLEMENTATION_GUIDE.md` §0.5. If I fall behind, drop T3.6 (Reddit) first and T3.4 (drift analysis) last.
 
@@ -153,6 +112,158 @@ The daily mood index computes and stores per ET day.
 
 **Known environment quirks**
 - Apple Silicon: `get_device()` returns `mps`. MPS is occasionally slower than CPU for small batches — if fine-tuning looks stuck, try `--device cpu` before debugging anything else.
+
+**Carry forward** — grouped by the session that acts on it
+
+*T4.2b — Why section (Mon Oct 5, Tue Oct 6)*
+- Block 1 is a contribution % column on Recommended articles, not a new
+  section. Ids are already carried in `ReportData`; contribution =
+  conf / Σ|conf·s| over non-neutral headlines, from `daily_index.terms`.
+  The lede replaces the "What happened" placeholder; source skew is one
+  line under the Sources table.
+- Stale guide text to fix: counterweight "above threshold" (no threshold
+  exists); "~47 headlines a day" (~15 measured).
+- `/models/` is gitignored, so the Actions runner won't have the fitted
+  TF-IDF vectorizer (`models/baselines/`). Decide: refit in CI from the
+  pinned split, commit the joblib file, or publish to the Hub.
+- Optional: one-line RSS summary under each article; needs `&amp;`
+  unescaping first (MarketWatch summaries).
+
+*T3.5 — Quality gates (Wed Oct 7)*
+- Gates vs disclosure: `min_headlines: 15` and blocking gates conflict with
+  the T3.3 decisions (no minimum count, show stats instead). Decide hard
+  blocks for broken runs (feeds down, dedupe failing, all items stale)
+  versus disclosure for thin days. T4.4's Done-when (`min_headlines: 9999`)
+  and §8's "Gates with teeth" depend on the outcome. `ReportData.gates`
+  replaces "not yet implemented".
+- Yahoo is stale: nothing newer than Sep 23 as of Sep 30, plus items from
+  2024. The index currently runs on CNBC and MarketWatch only. Decide
+  whether Yahoo stays, is gated, or is dropped.
+- Live distribution, first look (n=112, Sep 29): MarketWatch is 85% neutral
+  (n=20), the one source that stands out. Yahoo's positive share (29%)
+  matches CNBC (28%); it's the largest source, not a skewed one.
+
+*T2.6 — Model card (Thu Oct 8)*
+- Epoch 3 shipped, selected on val loss (0.1941). EarlyStopping never fired.
+  Epoch 2 had the higher val accuracy (94.02% vs 93.44%); never read 94.02%
+  as the published model's number.
+- FinBERT is not a ceiling: trained on PhraseBank, overlap with our test set
+  unmeasurable. Label it "trained on PhraseBank, reference only". §2 and the
+  T2.3 body still say "zero-shot reference ceiling"; fix both.
+- The top confusion is neutral→positive, not negative→neutral as T2.3
+  predicts. Still open: check DistilBERT against LogReg's four failure types
+  on the same test rows (object-dependent direction, boilerplate, lone
+  financial nouns, negation scope), lone nouns first.
+- Reproducibility: trained on MPS. Seeds fixed, but results are reproducible
+  in substance, not bit-identical; exact reproduction needs `--device cpu`.
+- Device split: local daily scoring runs on MPS, Actions on CPU, so
+  confidences can differ slightly. Published reports are scored on CPU.
+- Dedupe discards the syndication count (`UNIQUE(title_norm)`). Accepted
+  trade; state it.
+- `model_card.md` already has its Performance section (T2.5): ~165
+  headlines/s on M3 Pro CPU. Replace the T2.5 body's "2020 laptop" example.
+- Hub README is a placeholder in the gitignored `models/local/README.md`.
+  T2.6 replaces it from `docs/model_card.md`. Lean: do NOT bump
+  `model.revision` for a README-only commit (weights unchanged), so every
+  report cites one SHA for one model.
+
+*T4.5 — make demo (Fri Oct 9)*
+- `report --input` is undesigned. Sample rows have no url, source or
+  published_at; `score --file` writes `pred_label`, not `label`.
+- The demo must not write to the store or `reports/`; point it elsewhere via
+  the output-dir override.
+- In the demo every row's source is "unknown", which the header counts as
+  a source ("from 1 source").
+- `daily_index` column list in "Using the data" is stale (missing
+  `mean_conf`, `source_counts`, `terms`, `model_id`).
+
+*T3.4 — Drift analysis (Sun Oct 11)*
+- Whether the live split's resemblance to PhraseBank base rates reflects
+  correct labels or the model echoing its prior: the hand labels settle it.
+
+*README (Mon Oct 12)*
+- Training section: `PYTORCH_ENABLE_MPS_FALLBACK=1` routes unimplemented MPS
+  operators to CPU.
+- Reports render fully only on GitHub (Mermaid pie, `<details>`); local
+  previews show the pie as code, with the text line as fallback.
+
+*T4.4 — Actions (Sun Oct 18)*
+- Ingest every 4–6 h, score and report once: one fetch captures ~3 h of
+  MarketWatch, so ingest days are dominated by its 10-item burst. Update
+  §2's diagram and the cron.
+- Cache `~/.cache/newsmood`, keyed on `model.revision`.
+- `daily_index` holds real rows from Oct 1–2. Clear it before launch only
+  if you want the stored trend to start at launch.
+
+*Unassigned cleanup*
+- `perform_cross_validation()` is unported; §3's reuse table maps it to
+  `evaluation/metrics.py`, but no task needs it. Assign it or drop it.
+- Lexicon facts in T1.3 prose are partly wrong: "liability" is −0.8
+  (compound −0.2023 alone); "aggressive growth" scores +0.25. Guide edit
+  + §9 line.
+- `docs/baselines.md` VADER wording: the "Why no threshold fixes either"
+  heading and "the class direction blindness breaks" (~line 202) assume one
+  mechanism; the line-155 CLAIM splits negative errors 23/15. Update both.
+- Minor: `compute_mood` divides by zero if every confidence is 0
+  (unreachable, floor is 1/3); `scored_at` uses the real clock while
+  `fetched_at` uses the injected one. Neither affects reports.
+
+**Reference — built components and invariants**
+- **Timestamps**: `YYYY-MM-DDTHH:MM:SS.ffffff+00:00`, 32 chars, UTC, via
+  `store._ts` only. Day ranges are string comparisons and depend on it.
+- **T1.5**: `eval --all` writes the summary table between
+  `<!-- eval:summary:start/end -->` in `docs/baselines.md`.
+- **T1.6**: interpretive sentences in `docs/baselines.md` §Analysis are
+  wrapped in `<!-- CLAIM: ... -->` (`grep CLAIM:`).
+- **T2.4**: `loader.ensure_model()` checks the cache (`local_files_only`),
+  downloads only on a miss with one stderr notice, pinned SHA,
+  `cache_dir=~/.cache/newsmood`, `token=False`. Never reads `models/local/`.
+  `config.py` rejects any revision that isn't a full 40-char SHA.
+- **T2.5**: bare `score` writes only `label IS NULL` rows (never overwrites);
+  `--text`/`--file` are read-only; `--file` reads `sentence`, adds
+  `pred_label` + `confidence`. `--benchmark` needs `--file`, defaults to CPU;
+  other modes `auto`. `model.batch_size: 32`. Code in `models/scoring.py`,
+  `models/benchmark.py`.
+- **T3.2**: `store.py` owns the schema. Dedupe `UNIQUE(title_norm)`, first
+  seen wins; `published_at` only moves earlier. Label/confidence/scored_at
+  are all set or all NULL. Index buckets by `published_at`.
+- **T3.3**: ET day; every row counts, weighted by confidence; no minimum;
+  stats stored per day; today and yesterday recomputed, older days frozen;
+  empty days not stored; terms stored for T4.2b.
+- **T4.2/T4.3**: `report_data.build_report_data()` (all arithmetic) →
+  `template.render()` (formatting only) → `pipeline.run_report()` writes
+  `reports/{date}.md` atomically. Late headlines for a frozen day are
+  excluded and counted (`n_late`). Re-runs are byte-identical.
+
+**Deviations so far** — full entries in `IMPLEMENTATION_GUIDE.md` §9
+- `.gitignore`: `data/` → `data/*`, `models/` → `/models/`
+- `datasets>=4.0` dropped script loading → raw zip download, SHA-256
+  pinned, `PhraseBankSourceChanged` on mismatch
+- `max_length`: placeholder 192 → p95 58 → 96 with dynamic padding
+- `pytest` as a `dev` extra; scikit-learn, `huggingface_hub>=1.32,<2`, torch,
+  transformers, datasets and tqdm are core. `[train]` is empty
+- `config.py` precedence: explicit > env > yaml > default
+- All three feeds kept; Yahoo moved last; `store.db_path` in config
+- `eval --all` writes only the marker-delimited table
+- `EarlyStopping` shallow-copy bug fixed; `get_device()` cuda > mps > cpu
+- T2.2: 67 s on MPS. T2.3: FinBERT relabelled; Done-when six rows
+- T2.4: `hf upload`; cache `~/.cache/newsmood`; thin `score --text` in T2.4
+- T2.5: `--device`; benchmark on CPU; `scoring.py`/`benchmark.py`;
+  `model.batch_size`; `pred_label`; `model_card.md` started early
+- T3.3: ET day; no 0.60 cutoff; no minimum count + stats; hybrid recompute;
+  requested days only; empty days not stored; terms stored
+- T4.2/T3.5: dependencies changed to T3.3. T4.2: redesigned layout (pie,
+  recommended articles with links, source table, collapsed list),
+  `lede_bands` reuse, colorblind-safe pie colors, late-headline exclusion,
+  gates placeholder, `model_id` printed once
+- T4.2b: block 1 folded into Recommended articles
+- T4.3: `reporting/pipeline.py`; full-row store query; today also recomputes
+  yesterday; feed-failure tolerance; online mode errors until T4.1; 
+  Move the reports directory to config as report.output_dir (default
+  "reports"), read through settings like store.db_path. Keep the injectable
+  override for tests. Add the key to test_config's throwaway yaml and note it
+  in the existing §9 row for the pipeline module.
+
 ---
 
 ## How I want you to work with me

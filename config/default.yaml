@@ -137,3 +137,7 @@ report:
     negative: "#D55E00"
     positive: "#0072B2"
     neutral: "#999999"
+  # Where `newsmood report` writes {date}.md (T4.3). Committed, unlike the
+  # store. Relative to the working directory, like store.db_path. Override
+  # with NEWSMOOD_REPORT__OUTPUT_DIR.
+  output_dir: reports

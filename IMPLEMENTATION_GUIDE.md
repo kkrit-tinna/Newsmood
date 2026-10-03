@@ -195,6 +195,7 @@ newsmood/
 │   │   ├── aggregate.py         # mood index arithmetic
 │   │   ├── claude.py           # Anthropic client, retry, cost log
 │   │   ├── explain.py          # computed lede + Why blocks (T4.2b)
+│   │   ├── pipeline.py         # `report`: ingest → score → index → write (T4.3)
 │   │   ├── report_data.py      # day → finished report numbers (T4.2)
 │   │   └── template.py         # markdown assembly, no arithmetic
 │   └── training/
@@ -664,11 +665,18 @@ The footer's model id and revision are what make a report from six weeks ago int
 **Depends on:** T4.2, T2.5, T3.3
 **Commit:** `feat: automated-report-generation`
 
-`newsmood report [--date YYYY-MM-DD]` runs ingest → score → gates → narrative → write, and is safe to re-run for the same date.
+`newsmood report [--date YYYY-MM-DD] [--offline]` runs ingest → score → index → write, and is safe to re-run for the same date. Gates (T3.5) slot in before the write once built; until then nothing blocks it. The flow lives in `reporting/pipeline.py`'s `run_report()`; `cli.py` only parses flags and prints the path.
 
-**Build `--offline` first and make it the default for now.** In offline mode the narrative section is a short placeholder line and every other section is fully computed. T4.1 is not a dependency of this task; wire the Claude call in later behind the flag.
+- **Date**: defaults to today in `index.timezone` (America/New_York), from an injectable clock, never `date.today()`. A malformed or future `--date` is rejected before any I/O.
+- **Index**: `compute_days` gets the requested date; when that date is today, yesterday too, so late headlines still update it under T3.3's hybrid rule.
+- **Rows**: `store.scored_headlines_between` returns the day's full scored rows (title and url included) over `day_bounds`, with the same filter as the index query. `build_report_data` → `render` → `reports/{date}.md`, written to a temp file and renamed, overwriting any existing report.
+- **Ingest and score always run**, even for a past `--date`; both are idempotent. A failed feed is a stderr warning and the rest still count. If every feed fails, the report is built from stored data with a warning.
+- **Empty day**: the report is still written ("No headlines for this date.").
+- **Offline is the default and the only mode.** `--online` errors with "online mode not yet implemented (T4.1)". Nothing in this path reads `ANTHROPIC_API_KEY`. T4.1 wires the Claude call in behind the flag.
+- **Streams**: progress and warnings to stderr; stdout carries only the written report's path.
+- Feed fetcher, classifier, clock and output directory are injected, so `tests/test_pipeline.py` needs no network, no model and no real `reports/`.
 
-**Done when:** `newsmood report --offline` produces `reports/{today}.md` from live RSS, with a real mood index, real counts, and the full scored headline table — no API key present anywhere in the environment.
+**Done when:** `newsmood report --offline` produces `reports/{today}.md` from live RSS with no API key in the environment: a real mood index and counts in the header, the sentiment pie, recommended articles, the per-source table, and every scored headline in the collapsed `<details>` list. `pytest tests/test_pipeline.py` passes.
 
 ---
 
@@ -872,3 +880,8 @@ Append whenever reality differs. Date, task ID, what changed, why.
 | 2026-10-02 | T4.2 | Headlines link to the original article. Footer: "Links go to the original publisher; some limit free articles." Non-http(s) or missing urls render as plain text. Paywalls are deliberately not detected | Detection would mean fetching article pages, which is outside scope and adds network calls to an offline report. The footer line sets expectations instead |
 | 2026-10-02 | T4.2 | Rows for a date that aren't in the stored `terms` are excluded from the report and counted in a note under the header, instead of failing | A late headline can arrive for a frozen older day. Raising would make `report --date` fail for that day forever; including it would show a pie that disagrees with the frozen mood |
 | 2026-10-02 | T4.2 | Pie colors set per sentiment in `report.colors` (Okabe-Ito: negative #D55E00, positive #0072B2, neutral #999999). The theme's `pie1..pieN` list holds only the drawn slices, in drawn order, and slices are drawn count desc (ties in sentiment order) | Mermaid assigns colors by slice position, so dropping a zero slice shifted every later color onto the wrong sentiment. Current Mermaid colors in declaration order, older versions sorted by value first. Count-desc order makes the two agree |
+| 2026-10-02 | T4.3 | New module `reporting/pipeline.py` (`run_report()`) holds the report flow; added to §3. `cli.py report` only parses flags, maps errors and prints the path | CLAUDE.md: `cli.py` holds no business logic. Feed fetcher, classifier, clock and output directory are injected so the flow is tested without network, model or the real `reports/`. The output directory is config `report.output_dir` (default `reports`), read through settings like `store.db_path`; `run_report(out_dir=...)` overrides it for tests |
+| 2026-10-02 | T4.3 | New store query `scored_headlines_between` returns full scored rows (id, title, url, source, published_at, label, confidence). `scored_rows_between` kept unchanged for the index | The report needs titles and urls, which the index query doesn't return. Same filter and ordering, so report rows and index rows agree on membership (tested) |
+| 2026-10-02 | T4.3 | When the report date is today (ET), `compute_days` is also given yesterday | Under T3.3's hybrid rule only requested days are computed. Without this, a late headline for yesterday would never reach yesterday's row once the run moves on to today |
+| 2026-10-02 | T4.3 | Feed failure doesn't block the report: a failed feed is a stderr warning and the rest still count; if all feeds fail, the report is built from stored data with a warning | T3.5's gates aren't built, so there is no rule to decide whether a partial run is publishable. Ingest and score are idempotent, so the stored data is still a valid basis. T3.5 adds blocking |
+| 2026-10-02 | T4.3 | Offline is the default; `--online` errors with "online mode not yet implemented (T4.1)" before any work | T4.1 isn't built. Failing loudly beats silently producing an offline report under an online flag. No path here reads `ANTHROPIC_API_KEY` |

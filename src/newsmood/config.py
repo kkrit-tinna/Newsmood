@@ -123,6 +123,7 @@ class SentimentColors(BaseModel):
 class ReportSettings(BaseModel):
     recommended: RecommendedSettings
     colors: SentimentColors
+    output_dir: str
 
 
 class YamlConfigSource(PydanticBaseSettingsSource):

@@ -99,6 +99,7 @@ def _write_yaml_config(path: Path) -> None:
                 "report": {
                     "recommended": {"negative": 3, "positive": 3, "neutral": 2},
                     "colors": {"negative": "#000001", "positive": "#000002", "neutral": "#000003"},
+                    "output_dir": "yaml-reports",
                 },
             }
         )
@@ -148,6 +149,15 @@ def test_db_path_resolves_through_settings(tmp_path, monkeypatch):
 
     monkeypatch.setenv("NEWSMOOD_STORE__DB_PATH", "env.db")
     assert Settings().store.db_path == "env.db"
+
+
+def test_report_output_dir_resolves_through_settings(tmp_path, monkeypatch):
+    _point_settings_at_yaml(tmp_path, monkeypatch)
+    monkeypatch.delenv("NEWSMOOD_REPORT__OUTPUT_DIR", raising=False)
+    assert Settings().report.output_dir == "yaml-reports"
+
+    monkeypatch.setenv("NEWSMOOD_REPORT__OUTPUT_DIR", "env-reports")
+    assert Settings().report.output_dir == "env-reports"
 
 
 # --- explicit kwargs > env ---

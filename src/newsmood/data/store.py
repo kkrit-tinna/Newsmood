@@ -170,6 +170,19 @@ def scored_rows_between(conn: sqlite3.Connection, start: datetime, end: datetime
     return [dict(row) for row in conn.execute(sql, (_ts(start), _ts(end)))]
 
 
+def scored_headlines_between(conn: sqlite3.Connection, start: datetime, end: datetime) -> list[dict[str, Any]]:
+    """The same rows as scored_rows_between, with title and url added: the
+    full records a report shows (T4.3). Same filter and bounds, so a day's
+    report rows and its index rows can't disagree on membership."""
+    sql = """
+        SELECT id, title, url, source, published_at, label, confidence FROM headlines
+        WHERE published_at IS NOT NULL AND label IS NOT NULL
+          AND published_at >= ? AND published_at < ?
+        ORDER BY published_at, id
+    """
+    return [dict(row) for row in conn.execute(sql, (_ts(start), _ts(end)))]
+
+
 def get_daily_index(conn: sqlite3.Connection, date: str) -> dict[str, Any] | None:
     """The stored row for one YYYY-MM-DD, JSON columns decoded, or None."""
     row = conn.execute("SELECT * FROM daily_index WHERE date = ?", (date,)).fetchone()

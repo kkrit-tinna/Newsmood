@@ -95,9 +95,20 @@ def score(
 
 
 @app.command()
-def report():
-    """Aggregate scored headlines into a daily markdown report."""
-    print("not implemented")
+def report(
+    date: str = typer.Option(None, "--date", help="ET calendar day, YYYY-MM-DD. Default: today in America/New_York."),
+    offline: bool = typer.Option(True, "--offline/--online", help="Offline is the default and the only mode until T4.1."),
+):
+    """Ingest, score, index and write reports/{date}.md. Prints the report's path."""
+    # Imported here, not at module top: scoring imports torch, and
+    # `newsmood ingest` should not pay for it.
+    from newsmood.reporting import pipeline
+
+    try:
+        run = pipeline.run_report(get_settings(), date_arg=date, offline=offline)
+    except pipeline.ReportError as e:
+        raise typer.BadParameter(str(e))
+    print(run.path)
 
 
 @app.command()
