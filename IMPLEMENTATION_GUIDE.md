@@ -30,7 +30,7 @@
 
 Tasks are listed in §4–§7 in **dependency order**. They are *executed* in the order below, which is not the same thing — ingest (T3.1/T3.2) has no dependency on the model, so it moves early to reach a working report sooner.
 
-**No sessions on Sunday Sep 20 or Sunday Oct 4.**
+**No sessions on Sunday Sep 20, Sunday Oct 4, Thu Oct 8, Oct 10–11 or Oct 15–16.** Sessions are ~30 min Oct 9–14. Schedule revised Oct 8 (§9).
 
 ### Milestone: first offline report — target **Fri Oct 2**, slack to **Fri Oct 9**
 
@@ -54,25 +54,32 @@ Tasks are listed in §4–§7 in **dependency order**. They are *executed* in th
 | ~~Sun Oct 4~~ | — | *off* |
 | ~~Mon Oct 5~~ | — | *skipped* |
 | Tue Oct 6 – Wed Oct 7 | T4.2b Why section | contribution % + lede + clusters (blocks 2 and 4 dropped, §9) |
-| Thu Oct 8 | T3.5 quality gates | *moved from Wed* |
-| **Sun Oct 11** | **T3.4 drift analysis** | **~90 min, one sitting** |
-| Mon Oct 12 | README | |
-| Tue Oct 13 | T3.7 runbook | |
-| Wed Oct 14 | T2.6 model card | *moved from Thu Oct 8; replaces T4.1 if online mode is skipped* |
-| Wed Oct 14 | T4.1 Claude client | *optional — online mode* |
-| Thu Oct 15 | online report wiring | *optional* |
-| Fri Oct 16 | buffer | |
-| **Sun Oct 18** | **T4.4 Actions + T4.6 release** | **~60 min** |
+| ~~Thu Oct 8~~ | — | *off* |
+| Fri Oct 9 | T3.5 quality gates | *moved from Thu; Yahoo → replacement feed* |
+| ~~Sat Oct 10 – Sun Oct 11~~ | — | *off: school, career-fair prep* |
+| Mon Oct 12 | T3.5 review + commit · T3.4 blind sample export | |
+| **Tue Oct 13** | **T3.4 labeling** | **100 headlines, one sitting, 30–40 min** |
+| Wed Oct 14 | T3.4 analysis → `docs/drift.md` | |
+| ~~Thu Oct 15 – Fri Oct 16~~ | — | *off: career fair* |
+| **Sat Oct 17** | **T4.4 Actions** | **~60 min** |
+| Sun Oct 18 | T4.5 `make demo` | |
+| Mon Oct 19 | T2.6 model card | |
+| Tue Oct 20 | README | |
+| Wed Oct 21 | T3.7 runbook | |
+| **Thu Oct 22** | **T4.6 release** | **← end date (was Sun Oct 18)** |
+| Fri Oct 23 | buffer | unassigned cleanup |
+| after release | T4.1 Claude client + online wiring | *optional, deferred* |
+| — | ~~T3.6 Reddit ingest~~ | *dropped* |
 
 ### The two sessions that cannot move
 
 **Sun Sep 27** — the fine-tune needs 20–40 minutes of unattended wall clock plus setup and evaluation. If it lands at the majority-class rate and needs a second attempt, the milestone slips to Oct 9. That is what the Oct 9 buffer is for.
 
-**Sun Oct 11** — T3.4 hand-labels 100 headlines. Do it in one sitting so your own labeling stays consistent; splitting it across two weekdays changes the labels partway through.
+**Tue Oct 13** (moved from Sun Oct 11) — T3.4 hand-labels 100 headlines. Do it in one sitting so your own labeling stays consistent; splitting it across two weekdays changes the labels partway through. The analysis afterwards (Wed Oct 14) can be a separate session.
 
 ### What "offline-first" changes
 
-`--offline` produces the whole report, including the one-sentence template lede (T4.2b, block 0) and every evidence block below it. The only thing it omits is the multi-sentence Claude narrative. That takes T4.1 (the Claude client) off the critical path entirely, which is why it sits on Oct 14, marked optional. Everything up to and including the Oct 2 milestone runs with **no API key and no paid service**.
+`--offline` produces the whole report, including the one-sentence template lede (T4.2b, block 0) and every evidence block below it. The only thing it omits is the multi-sentence Claude narrative. That takes T4.1 (the Claude client) off the critical path entirely, which is why it is optional and now deferred until after the Oct 22 release. Everything up to and including the Oct 2 milestone runs with **no API key and no paid service**.
 
 If you never enable online mode, the project is still complete: `make demo`, the model, the index, the tables, the gates, the drift analysis and the README all stand. You lose one section of prose.
 
@@ -572,7 +579,7 @@ Write `quality_report.json` every run, pass or fail.
 
 ---
 
-### T3.6 — Reddit ingest *(optional, drop first if behind)*
+### T3.6 — Reddit ingest *(optional — dropped Oct 8, §9)*
 **Commit:** `feat: reddit-ingest`
 
 PRAW against r/stocks and r/investing. Only worth doing if T3.4 came in strong. Tag rows with `source_type` so the mood index can be computed with and without social text — mixing wire headlines and Reddit comments into one number without that flag makes the number uninterpretable.
@@ -595,7 +602,7 @@ How to run each stage manually, what each gate failure means, how to re-score af
 **Depends on:** T4.3
 **Commit:** `feat: claude-api-integration`
 
-**Optional.** Everything ships without this. Do it only once the offline report works end to end.
+**Optional.** Everything ships without this. Do it only once the offline report works end to end. Deferred until after the Oct 22 release (§9, 2026-10-08).
 
 This task creates `.env.example` — a committed file holding the variable *name* with an empty value, so a reader knows the variable exists. The real key lives in `.env`, which is gitignored from T1.1 onward and never committed. Until this task runs, the project has no environment variables and no `.env.example`.
 
@@ -903,3 +910,4 @@ Append whenever reality differs. Date, task ID, what changed, why.
 | 2026-10-07 | T4.2b | Block 3 clusters: complete linkage, cosine, `explain.cluster_distance: 0.6`, `min_cluster_size: 3`, `min_headlines: 8`, `cluster_purity: 0.70`. Block 3 declines ("no clear theme today") on all six real days, and no lede names a driver yet. Re-check `cluster_distance` once T4.4 ingests every 4–6 h | Calibration at 0.6 / 0.7 / 0.8 (2-character tokens): every cluster at 0.6 was one story or one tight topic (the AI "hottest skill" story CNBC published twice; Fed minutes, Oct 7; retirement, Oct 2), all of size 2. At 0.7, Oct 2's AI-skills pair joined "Tesla sold a lot more EVs than Wall Street expected" on "wall street" alone (1 neg / 2 pos, +21.3%): a false theme. 0.8 joined on single words ("lot", "stock"). `min_cluster_size: 3` because the highest-share size-2 cluster was one story syndicated twice. `min_headlines: 8` sits in the measured gap (ingest days 12–29, others 1–4). ~15 headlines/day reflects one ingest a day; with more headlines per day, 0.6 may prove too tight |
 | 2026-10-07 | T4.2b | Lede theme clause has three cases: a qualifying cluster → "driven mainly by N headlines on <terms>"; clustering ran (day ≥ `explain.min_headlines`) and nothing qualified, or the band is "roughly flat" → "with no dominant theme"; day below `min_headlines` → the clause is omitted. Shortest form: "… (index -26.4) across 5 headlines." | On a day too thin to cluster nothing was examined, so "no dominant theme" would claim a check that never ran |
 | 2026-10-07 | T4.2b | Config keys beyond the planned set: `explain.min_term_headlines` (2), `window_ngram_range` ([1, 2]), `window_min_df` (2), `cluster_name_terms` (3). New store query `first_fetched_at`: "history" for cluster naming is days since the store's first fetch | CLAUDE.md: no thresholds in modules; the window vectorizer's settings sit in config like `logreg`'s. History can't come from `published_at`: Yahoo carries items from 2024, which would make a week-old store look years deep |
+| 2026-10-08 | schedule | Timeline extended: release moves from Sun Oct 18 to Thu Oct 22, buffer Fri Oct 23. Sessions are ~30 min Oct 9–14; no sessions Oct 8, Oct 10–11, Oct 15–16. T3.5 → Fri Oct 9 (review Mon Oct 12). T3.4 split into labeling (Tue Oct 13, one sitting) and analysis (Wed Oct 14). T4.4 → Sat Oct 17, T4.5 → Sun Oct 18, T2.6 / README / T3.7 → Oct 19–21. T3.6 (Reddit) dropped. T4.1 and online wiring deferred until after release | School deadlines and the Oct 15 career fair. T3.4 goes before the fair because live-headline accuracy is the project's strongest result; only its analysis is split off, labeling stays one sitting. T4.4 needs T3.5 and doesn't fit 30-minute slots. T3.6 was always first to drop |
