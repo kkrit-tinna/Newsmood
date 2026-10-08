@@ -141,3 +141,44 @@ report:
   # store. Relative to the working directory, like store.db_path. Override
   # with NEWSMOOD_REPORT__OUTPUT_DIR.
   output_dir: reports
+
+lede:
+  # The computed lede under "What happened" (T4.2b, block 0). Strength words
+  # come from lede_bands above, shared with the header.
+  # Change slot: delta vs the previous session, on displayed 1-decimal moods.
+  # Omitted when |delta| < change_min_delta (so exactly 5.0 is shown).
+  change_min_delta: 5
+  # The previous session is the most recent day in D-1 .. D-N (inclusive)
+  # with a stored daily_index row and at least prev_session_min_headlines.
+  # Measured Sep 21-Oct 7: days with an ingest run had 12-29 headlines, days
+  # without had 1-4, so 5 separates them. Weekend days qualify if they pass.
+  prev_session_lookback_days: 5
+  prev_session_min_headlines: 5
+
+explain:
+  # Themes under "What happened" (T4.2b, blocks 2-3).
+  # window: TfidfVectorizer fit at report time on day D plus the previous
+  # background_days of stored headlines. phrasebank: the T1.4 vectorizer in
+  # logreg.artifact_dir, dev-only (models/ is gitignored). IMPLEMENTATION_GUIDE.md §9, 2026-10-07.
+  vectorizer: window
+  # Unigram OOV share of today's headlines against the chosen vocabulary.
+  # Above this, stderr suggests switching to window (operator advice only).
+  oov_warn: 0.20
+  background_days: 30
+  # Floors. Below any of them block 3 prints "no clear theme today".
+  # Calibrated on the six stored days with >= 8 headlines (Sep 22-Oct 7,
+  # one ingest a day): every cluster at 0.6 was one story or one tight topic;
+  # 0.7 joined unrelated stories on "wall street". Re-check after T4.4 ingests
+  # every 4-6 h. IMPLEMENTATION_GUIDE.md §9, 2026-10-07.
+  min_headlines: 8                  # day total; below it nothing is clustered
+  min_cluster_size: 3               # 2 is often one story syndicated twice
+  cluster_purity: 0.70              # share of a cluster's dominant sentiment, for the lede driver
+  cluster_distance: 0.6             # cosine distance threshold, complete linkage
+  # A cluster is named only by terms in at least this many of its own rows.
+  min_term_headlines: 2
+  # window mode's TfidfVectorizer. min_df counts headlines across the whole
+  # fit (today + background), so a word used once in the window drops out.
+  window_ngram_range: [1, 2]
+  window_min_df: 2
+  # Terms naming each cluster.
+  cluster_name_terms: 3

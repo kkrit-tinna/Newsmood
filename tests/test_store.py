@@ -172,3 +172,14 @@ def test_stored_timestamps_are_fixed_width_utc(conn):
     (row,) = _rows(conn).values()
     assert row["published_at"] == "2026-09-24T17:00:00.000000+00:00"
     assert len(row["fetched_at"]) == 32 and row["fetched_at"].endswith("+00:00")
+
+
+def test_first_fetched_at_is_earliest_fetch_not_publish(conn):
+    from newsmood.data.store import first_fetched_at
+
+    assert first_fetched_at(conn) is None
+    a, _ = parse_feed(WIRE_A, "outlet-a", T2)
+    b, _ = parse_feed(WIRE_B, "outlet-b", T1)  # only "Gold hits record" is new, fetched earlier
+    upsert_headlines(conn, a)
+    upsert_headlines(conn, b)
+    assert first_fetched_at(conn) == T1

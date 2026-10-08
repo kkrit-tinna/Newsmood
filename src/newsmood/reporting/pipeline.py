@@ -29,7 +29,8 @@ from zoneinfo import ZoneInfo
 from newsmood.config import Settings
 from newsmood.data import feeds, store
 from newsmood.models import scoring
-from newsmood.reporting.aggregate import DayResult, compute_days, day_bounds
+from newsmood.reporting.aggregate import DayMood, DayResult, compute_days, day_bounds
+from newsmood.reporting.explain import SessionLookup, ThemeInputs, build_explanation
 from newsmood.reporting.report_data import build_report_data
 from newsmood.reporting.template import render
 
@@ -45,7 +46,8 @@ class ReportError(ValueError):
 class ReportRun:
     path: Path
     result: DayResult  # the reported day
-    computed: tuple[DayResult, ...]  # every day compute_days touched this run
+    computed: tuple[DayResult, ...]  # the reported day (and yesterday, when it is today)
+    lookback: tuple[DayResult, ...]  # extra days computed to find the lede's previous session
 
 
 def resolve_date(requested: str | None, today: date) -> date:
@@ -104,10 +106,53 @@ def run_report(
             _progress(f"index: {r.date.isoformat()} {r.action} ({_mood(r)}, n={r.day.n_headlines})")
         result = next(r for r in computed if r.date == day)
         rows = store.scored_headlines_between(conn, *day_bounds(day, tz))
+        data = build_report_data(result, rows, settings)
+        lookup, lookback = session_lookup(conn, settings, started, computed)
+        explanation = build_explanation(data, settings, lookup=lookup, themes=theme_inputs(conn, settings, result, rows))
+        for r in lookback:
+            _progress(f"index: {r.date.isoformat()} {r.action} for the previous session ({_mood(r)}, n={r.day.n_headlines})")
+        if explanation is not None and explanation.oov is not None and explanation.oov.suggest_window:
+            _progress(
+                f"note: {explanation.oov.rate_pct:.1f}% of today's words are outside the phrasebank vocabulary "
+                f"(explain.oov_warn {settings.explain.oov_warn:.0%}); consider explain.vectorizer: window"
+            )
 
     out_dir = Path(settings.report.output_dir if out_dir is None else out_dir)
-    path = write_atomic(out_dir / f"{day.isoformat()}.md", render(build_report_data(result, rows, settings)))
-    return ReportRun(path=path, result=result, computed=computed)
+    path = write_atomic(out_dir / f"{day.isoformat()}.md", render(data, explanation))
+    return ReportRun(path=path, result=result, computed=computed, lookback=tuple(lookback))
+
+
+def theme_inputs(conn, settings: Settings, result: DayResult, rows: list[dict]) -> ThemeInputs:
+    """Blocks 2-3's inputs: the day's rows and snapshot terms, the stored rows
+    of the previous explain.background_days ET days, and how many days of
+    history the store holds before the reported day (from its first fetch)."""
+    tz = ZoneInfo(settings.index.timezone)
+    day = result.date
+    start = day_bounds(day - timedelta(days=settings.explain.background_days), tz)[0]
+    background = store.scored_headlines_between(conn, start, day_bounds(day, tz)[0])
+    first = store.first_fetched_at(conn)
+    history_days = 0 if first is None else max(0, (day - first.astimezone(tz).date()).days)
+    return ThemeInputs(rows=rows, terms=result.day.terms, background=background, history_days=history_days)
+
+
+def session_lookup(
+    conn, settings: Settings, started: datetime, computed: tuple[DayResult, ...]
+) -> tuple[SessionLookup, list[DayResult]]:
+    """The lede's view of stored daily_index rows. A day already computed this
+    run is reused; any other is computed with the index's own rules (older
+    days written once, empty days not stored) and appended to the returned
+    list. An empty day answers None: it has no stored row."""
+    known = {r.date: r for r in computed}
+    extra: list[DayResult] = []
+
+    def lookup(day: date) -> DayMood | None:
+        if day not in known:
+            (known[day],) = compute_days(conn, [day], settings, now=started)
+            extra.append(known[day])
+        r = known[day]
+        return None if r.action == "empty" else r.day
+
+    return lookup, extra
 
 
 def write_atomic(path: Path, text: str) -> Path:

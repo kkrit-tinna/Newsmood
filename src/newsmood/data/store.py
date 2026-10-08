@@ -183,6 +183,13 @@ def scored_headlines_between(conn: sqlite3.Connection, start: datetime, end: dat
     return [dict(row) for row in conn.execute(sql, (_ts(start), _ts(end)))]
 
 
+def first_fetched_at(conn: sqlite3.Connection) -> datetime | None:
+    """When the store's history begins: the earliest fetched_at, or None when
+    empty. published_at can't say this, since feeds carry items years old."""
+    value = conn.execute("SELECT min(fetched_at) FROM headlines").fetchone()[0]
+    return None if value is None else datetime.fromisoformat(value)
+
+
 def get_daily_index(conn: sqlite3.Connection, date: str) -> dict[str, Any] | None:
     """The stored row for one YYYY-MM-DD, JSON columns decoded, or None."""
     row = conn.execute("SELECT * FROM daily_index WHERE date = ?", (date,)).fetchone()

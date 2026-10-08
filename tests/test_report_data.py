@@ -339,3 +339,42 @@ def test_empty_day(settings):
     assert (data.n_headlines, data.n_sources, data.n_unsure, data.n_late) == (0, 0, 0, 0)
     assert data.slices == data.pie == data.recommended == data.sources == data.headlines == ()
     assert data.date == DAY and data.model_id == MID
+
+
+# --- contribution (T4.2b block 1) ---
+
+
+def test_contribution_is_conf_over_total_movement(settings):
+    # Σ|conf·s| over non-neutrals = 0.91 + 0.55 + 0.97 + 0.81 + 0.59 = 3.83
+    data = build(mixed_day(), settings)
+    got = {h.id: h.contribution_pct for h in data.headlines}
+    assert got == {"n1": 23.8, "n2": 14.4, "p1": 25.3, "p2": 21.1, "p3": 15.4, "u1": None, "u2": None, "u3": None}
+    shown = [h.id for g in data.recommended for h in g.items if h.contribution_pct is not None]
+    assert shown == ["n1", "n2", "p1", "p2", "p3"]
+
+
+def test_contribution_rounds_half_up(settings):
+    # 100 × 0.49 / 4.0 = 12.25: half-up gives 12.3, round() would give 12.2.
+    rows = [row("n1", "negative", 0.49)] + [row(f"p{i}", "positive", c) for i, c in enumerate((0.9, 0.9, 0.9, 0.81))]
+    assert build(rows, settings).headlines[0].contribution_pct == 12.3
+
+
+def test_contribution_is_not_normalized(settings):
+    # Three equal negatives: 33.3 each, summing to 99.9. Normalizing would bump one to 33.4.
+    rows = [row(f"n{i}", "negative", 0.8) for i in range(3)]
+    assert [h.contribution_pct for h in build(rows, settings).headlines] == [33.3, 33.3, 33.3]
+
+
+def test_contribution_comes_from_the_stored_terms(settings):
+    # A frozen day's snapshot holds its own terms; the shares follow them,
+    # not the rows' current confidences.
+    rows = mixed_day()
+    mood = compute_mood(rows, low_confidence=0.6)
+    snapshot = dataclasses.replace(mood, terms=tuple((i, -1.0 if i == "n1" else 0.0) for i, _ in mood.terms))
+    data = build_report_data(DayResult(DAY, snapshot, MID, "kept"), rows, settings)
+    assert {h.id: h.contribution_pct for h in data.headlines if h.contribution_pct is not None} == {"n1": 100.0}
+
+
+def test_all_neutral_day_has_no_contributions(settings):
+    data = build([row(f"u{i}", "neutral", 0.8) for i in range(3)], settings)
+    assert [h.contribution_pct for h in data.headlines] == [None, None, None]

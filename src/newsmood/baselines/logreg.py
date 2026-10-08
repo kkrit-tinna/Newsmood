@@ -98,9 +98,10 @@ def load_artifacts(settings: Settings) -> tuple[TfidfVectorizer, LogisticRegress
 def load_vectorizer(settings: Settings) -> TfidfVectorizer:
     """Load the persisted TF-IDF vectorizer alone.
 
-    This is the only vectorizer the project should ever fit —
-    `reporting/explain.py` (T4.2b) calls this for distinctive terms and
-    clustering rather than fitting a second one."""
+    Fitted once by fit() on the training split and never refit. The report
+    uses it only in `explain.vectorizer: phrasebank` mode (dev-only, T4.2b);
+    the default `window` mode fits its own vectorizer per report run in
+    `reporting/explain.py`."""
     vectorizer, _ = load_artifacts(settings)
     return vectorizer
 

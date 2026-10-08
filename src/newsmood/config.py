@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import yaml
 from pydantic import AfterValidator, BaseModel, StringConstraints
@@ -105,6 +105,26 @@ class LedeBandsSettings(BaseModel):
     moderate: float
 
 
+class LedeSettings(BaseModel):
+    change_min_delta: float
+    prev_session_lookback_days: int
+    prev_session_min_headlines: int
+
+
+class ExplainSettings(BaseModel):
+    vectorizer: Literal["window", "phrasebank"]
+    oov_warn: float
+    background_days: int
+    min_headlines: int
+    min_cluster_size: int
+    cluster_purity: float
+    cluster_distance: float
+    min_term_headlines: int
+    window_ngram_range: tuple[int, int]
+    window_min_df: int
+    cluster_name_terms: int
+
+
 class RecommendedSettings(BaseModel):
     negative: int
     positive: int
@@ -161,6 +181,8 @@ class Settings(BaseSettings):
     finbert: FinbertSettings
     index: IndexSettings
     lede_bands: LedeBandsSettings
+    lede: LedeSettings
+    explain: ExplainSettings
     report: ReportSettings
 
     @classmethod

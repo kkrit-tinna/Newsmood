@@ -23,9 +23,9 @@ def sl(sentiment, count, share):
     return SentimentSlice(sentiment, count, share, {"negative": RED, "positive": BLUE, "neutral": GREY}[sentiment])
 
 
-A1 = Headline("a1", "negative", 96, False, "Regional bank shares slide on deposit outflows", "https://www.cnbc.com/a1", True, "cnbc")
-A2 = Headline("a2", "negative", 57, True, "Oil slips | demand *outlook* dims", "javascript:alert(1)", False, "marketwatch")
-A3 = Headline("a3", "positive", 96, False, "Chipmaker [NVDA] beats estimates", "https://example.com/a b_(c)|d", True, "cnbc")
+A1 = Headline("a1", "negative", 96, False, "Regional bank shares slide on deposit outflows", "https://www.cnbc.com/a1", True, "cnbc", 43.2)
+A2 = Headline("a2", "negative", 57, True, "Oil slips | demand *outlook* dims", "javascript:alert(1)", False, "marketwatch", 25.7)
+A3 = Headline("a3", "positive", 96, False, "Chipmaker [NVDA] beats estimates", "https://example.com/a b_(c)|d", True, "cnbc", 31.1)
 A5 = Headline("a5", "neutral", 88, False, "Treasury auction schedule", "https://finance.yahoo.com/a5", True, "yahoo-finance")
 A4 = Headline("a4", "neutral", 88, False, "Fed minutes <due> Wednesday", None, False, "unknown")
 
@@ -64,6 +64,8 @@ FOOTER = f"""---
 
 Certainty is the model's confidence in its label; below 60% it is marked unsure.
 
+"Of the day's movement" is a headline's certainty over the sum of every non-neutral headline's certainty: its part in moving the index. Neutral headlines move it by 0.
+
 Links go to the original publisher; some limit free articles.
 
 Model: {MID} · Gates: not yet implemented · Not financial advice.
@@ -94,14 +96,14 @@ _Offline report: no written summary. Every number on this page is computed from 
 
 ### Negative
 
-- [Regional bank shares slide on deposit outflows](<https://www.cnbc.com/a1>) · 96% · cnbc
-- Oil slips \\| demand \\*outlook\\* dims · 57% (unsure) · marketwatch
+- [Regional bank shares slide on deposit outflows](<https://www.cnbc.com/a1>) · 96% · 43.2% of the day's movement · cnbc
+- Oil slips \\| demand \\*outlook\\* dims · 57% (unsure) · 25.7% of the day's movement · marketwatch
 
 _Only 2 negative headlines today._
 
 ### Positive
 
-- [Chipmaker \\[NVDA\\] beats estimates](<https://example.com/a b_(c)\\|d>) · 96% · cnbc
+- [Chipmaker \\[NVDA\\] beats estimates](<https://example.com/a b_(c)\\|d>) · 96% · 31.1% of the day's movement · cnbc
 
 _Only 1 positive headline today._
 
@@ -227,3 +229,21 @@ def test_title_newlines_collapse_so_rows_stay_intact():
     h = dataclasses.replace(A5, title="Two\nlines  here")
     md = render(report(headlines=(h,), recommended=(RecommendedGroup("neutral", 2, (h,)),)))
     assert "| neutral | 88% | [Two lines here](<https://finance.yahoo.com/a5>) | yahoo-finance |" in md
+
+
+def test_lede_replaces_placeholder_under_what_happened():
+    from newsmood.reporting.explain import Explanation
+
+    lede = "Financial news leaned mildly negative today (index -13.7) across 5 headlines, with no dominant theme."
+    expl = Explanation(
+        lede=lede, previous=None, change=None, driver=None, clustered=False, n_headlines=5, min_headlines=8,
+        clusters=(), oov=None, fit=None,
+    )
+    md = render(report(), expl)
+    assert f"## What happened\n\n{lede}\n\n**Clusters:** no clear theme today (5 headlines; clustering needs 8).\n\n## Recommended articles" in md
+    assert "Offline report: no written summary" not in md
+
+
+def test_neutral_items_show_certainty_only():
+    md = render(report())
+    assert "- [Treasury auction schedule](<https://finance.yahoo.com/a5>) · 88% · yahoo-finance\n" in md

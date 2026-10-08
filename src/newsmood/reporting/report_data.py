@@ -11,6 +11,10 @@ legitimate: a late headline can arrive for a frozen older day. They are
 excluded and counted in n_late. A stored id with no row raises, because the
 frozen mood would then rest on headlines the report can't show.
 
+Contribution (T4.2b block 1) is each non-neutral headline's share of the
+day's movement, conf / Σ|conf·s|, read from the stored terms. Within a
+sentiment it ranks the same as certainty, since |s| = 1.
+
 Rounding is one rule throughout: half-up on the decimal value (0.955 → 96%,
 12.25% → 12.3%), via Decimal(repr(x)) so binary float noise can't push a
 half-way value down.
@@ -24,6 +28,7 @@ Titles, urls and sources are passed through unescaped; escaping is template.py's
 
 from __future__ import annotations
 
+import math
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date
@@ -50,6 +55,10 @@ class Headline:
     url: str | None  # as stored, untouched; None when missing
     linked: bool  # False → render title as plain text
     source: str
+    # Share of the day's movement, 100 × conf / Σ|confⱼ·sⱼ| over the stored
+    # terms, 1 decimal half-up. None for neutral (its term is 0). Values are
+    # not normalized, so the shown ones need not sum to 100.
+    contribution_pct: float | None = None
 
 
 @dataclass(frozen=True)
@@ -120,8 +129,10 @@ def build_report_data(
     day = result.day
     rows, n_late = _snapshot_rows(result, rows)
     low = settings.index.low_confidence
-    headlines = [_headline(r, low) for r in sorted(rows, key=_display_key)]
-    mood = None if day.mood is None else _round(day.mood, "0.1")
+    movement = math.fsum(abs(t) for _, t in day.terms)
+    terms = dict(day.terms)
+    headlines = [_headline(r, low, terms[r["id"]], movement) for r in sorted(rows, key=_display_key)]
+    mood = None if day.mood is None else round_half_up(day.mood, "0.1")
     if mood == 0:
         mood = 0.0  # no "-0.0" in the header
     sources = _sources(headlines)
@@ -211,7 +222,9 @@ def _snapshot_rows(result: DayResult, rows: list[Mapping[str, Any]]) -> tuple[li
     return kept, len(rows) - len(kept)
 
 
-def _headline(r: Mapping[str, Any], low: float) -> Headline:
+def _headline(r: Mapping[str, Any], low: float, term: float, movement: float) -> Headline:
+    """`term` is the row's stored conf·s and `movement` the day's Σ|conf·s|,
+    both from the index snapshot, so a frozen day keeps its frozen shares."""
     url = r.get("url") or None
     source = (r.get("source") or "").strip() or UNKNOWN_SOURCE
     return Headline(
@@ -223,6 +236,7 @@ def _headline(r: Mapping[str, Any], low: float) -> Headline:
         url=url,
         linked=is_linkable(url),
         source=source,
+        contribution_pct=round_half_up(100 * abs(term) / movement, "0.1") if term else None,
     )
 
 
@@ -248,7 +262,8 @@ def _sources(headlines: list[Headline]) -> tuple[SourceRow, ...]:
     return tuple(sorted(rows, key=lambda s: (-s.total, s.source)))
 
 
-def _round(x: float, step: str) -> float:
+def round_half_up(x: float, step: str) -> float:
+    """The report's one rounding rule, e.g. step "0.1" for one decimal."""
     return float(Decimal(repr(x)).quantize(Decimal(step), rounding=ROUND_HALF_UP))
 
 

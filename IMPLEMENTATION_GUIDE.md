@@ -52,14 +52,13 @@ Tasks are listed in §4–§7 in **dependency order**. They are *executed* in th
 | Thu Oct 1 | T4.2 report template | |
 | **Fri Oct 2** | **T4.3 first offline report** | **← milestone** |
 | ~~Sun Oct 4~~ | — | *off* |
-| Mon Oct 5 | T4.2b Why section, part 1 | contribution % + source skew + lede scaffold |
-| Tue Oct 6 | T4.2b Why section, part 2 | distinctive terms + clusters |
-| Wed Oct 7 | T3.5 quality gates | |
-| Thu Oct 8 | T2.6 model card | |
-| Fri Oct 9 | T4.5 `make demo` | |
+| ~~Mon Oct 5~~ | — | *skipped* |
+| Tue Oct 6 – Wed Oct 7 | T4.2b Why section | contribution % + lede + clusters (blocks 2 and 4 dropped, §9) |
+| Thu Oct 8 | T3.5 quality gates | *moved from Wed* |
 | **Sun Oct 11** | **T3.4 drift analysis** | **~90 min, one sitting** |
 | Mon Oct 12 | README | |
 | Tue Oct 13 | T3.7 runbook | |
+| Wed Oct 14 | T2.6 model card | *moved from Thu Oct 8; replaces T4.1 if online mode is skipped* |
 | Wed Oct 14 | T4.1 Claude client | *optional — online mode* |
 | Thu Oct 15 | online report wiring | *optional* |
 | Fri Oct 16 | buffer | |
@@ -629,11 +628,12 @@ Deterministic markdown in two layers. `reporting/report_data.py`'s `build_report
 {mermaid pie of the non-zero sentiments, count desc, colored from report.colors; then one line naming all three: count (share %)}
 
 ## What happened
-{offline: fixed placeholder line. T4.2b's lede replaces it; T4.1's narrative replaces the lede}
+{T4.2b's lede (one sentence), then its Clusters line and one vocabulary line. T4.1's narrative replaces the lede}
 
 ## Recommended articles (highest model certainty, not most important)
 {per sentiment, top headlines by confidence: report.recommended = 3 negative, 3 positive, 2 neutral.
- Each: [title](url) · certainty % · source. Fewer than requested → "only 2 today"}
+ Each: [title](url) · certainty % · source; negative and positive items add "· x.x% of the day's movement"
+ after certainty (T4.2b block 1). Fewer than requested → "only 2 today"}
 
 ## Sources
 | Source | Headlines | Negative | Neutral | Positive |     ← total desc, then name
@@ -668,10 +668,11 @@ The footer's model id and revision are what make a report from six weeks ago int
 `newsmood report [--date YYYY-MM-DD] [--offline]` runs ingest → score → index → write, and is safe to re-run for the same date. Gates (T3.5) slot in before the write once built; until then nothing blocks it. The flow lives in `reporting/pipeline.py`'s `run_report()`; `cli.py` only parses flags and prints the path.
 
 - **Date**: defaults to today in `index.timezone` (America/New_York), from an injectable clock, never `date.today()`. A malformed or future `--date` is rejected before any I/O.
-- **Index**: `compute_days` gets the requested date; when that date is today, yesterday too, so late headlines still update it under T3.3's hybrid rule.
+- **Index**: `compute_days` gets the requested date; when that date is today, yesterday too, so late headlines still update it under T3.3's hybrid rule. Since T4.2b, the lede's previous-session lookup also computes any candidate day in D−1 … D−`lede.prev_session_lookback_days` that has no stored row, newest first, stopping at the first that qualifies: older days are written once, empty days are not stored.
 - **Rows**: `store.scored_headlines_between` returns the day's full scored rows (title and url included) over `day_bounds`, with the same filter as the index query. `build_report_data` → `render` → `reports/{date}.md`, written to a temp file and renamed, overwriting any existing report.
 - **Ingest and score always run**, even for a past `--date`; both are idempotent. A failed feed is a stderr warning and the rest still count. If every feed fails, the report is built from stored data with a warning.
 - **Empty day**: the report is still written ("No headlines for this date.").
+- **"What happened"** holds a fixed placeholder line until T4.2b, whose computed lede replaces it.
 - **Offline is the default and the only mode.** `--online` errors with "online mode not yet implemented (T4.1)". Nothing in this path reads `ANTHROPIC_API_KEY`. T4.1 wires the Claude call in behind the flag.
 - **Streams**: progress and warnings to stderr; stdout carries only the written report's path.
 - Feed fetcher, classifier, clock and output directory are injected, so `tests/test_pipeline.py` needs no network, no model and no real `reports/`.
@@ -684,28 +685,26 @@ The footer's model id and revision are what make a report from six weeks ago int
 **Depends on:** T4.3
 **Commit:** `feat: computed-explanation-section`
 
-In the report, the lede replaces the offline placeholder under "What happened". If T4.1 is built, the Claude narrative replaces the lede there.
+In the report, the lede replaces the offline placeholder under "What happened", and the Clusters line (block 3) and one vocabulary line sit directly below it in the same section. If T4.1 is built, the Claude narrative replaces the lede there. Nothing goes under the Sources table.
 
-Five blocks in `reporting/explain.py`. **Block 0 is written last**, because it composes from the other four.
+Three blocks (0, 1 and 3; 2 and 4 were dropped, see §9). Block 1 lives in `reporting/report_data.py`, the rest in `reporting/explain.py`. **Block 0 is written last**, because it composes from the others.
 
 **0. The lede — one sentence, assembled from a template.**
 
-A single human-readable line at the top of the report. No model, no API, no download: it is string assembly over values blocks 1–4 already produced, so it is free, instant, and unit-testable.
+A single human-readable line at the top of the report. No model, no API, no download: it is string assembly over values blocks 1 and 3 already produced, so it is free, instant, and unit-testable.
 
 ```
 Financial news leaned moderately negative today (index -18.4, down 12.1
-from yesterday), driven mainly by 9 headlines on foundry delays, with
-regional bank earnings the main counterweight.
+from yesterday), driven mainly by 9 headlines on foundry delays.
 ```
 
-Four slots, each independently omitted when its data does not support it:
+Three slots, each independently omitted when its data does not support it:
 
 | Slot | Source | Omitted when |
 |---|---|---|
-| Direction + strength | index band (see below) | never — always present |
-| Change | delta vs. previous session | \|delta\| < 5, or no prior session |
-| Driver | largest cluster (block 3) + its distinctive terms (block 2) | cluster below `min_cluster_size` or below 70% single-sentiment |
-| Counterweight | top mover on the opposite side (block 1) | no opposite-side headline above threshold |
+| Direction + strength | `lede_bands` on the displayed 1-decimal mood, the same rule as the header | never — always present |
+| Change | delta vs. the previous session: the most recent day in D−1 … D−5 (inclusive, `lede.prev_session_lookback_days`) with a stored `daily_index` row and `n_headlines ≥ lede.prev_session_min_headlines`. Weekend days qualify if they meet the floor. Computed from displayed 1-decimal moods. A candidate day with no stored row is computed with the index code (older days written once, empty days not stored) | \|delta\| < `lede.change_min_delta`, or no day in the lookback qualifies |
+| Driver | the cluster (block 3) with the largest share of tilt in the mood's direction that meets `min_cluster_size` and `cluster_purity` (≥ 70% one sentiment, matching the mood's sign), named by its distinctive terms. Never the largest cluster by size: on Oct 2 the largest cluster was 4 neutral retirement columns, which contribute 0 to the index | the day is below `explain.min_headlines`: clustering didn't run, so the clause is omitted entirely. Clustering ran but no cluster qualifies, or the band is "roughly flat": "with no dominant theme" |
 
 Bands in `config/default.yaml`, so the wording is tunable without touching code:
 
@@ -716,38 +715,42 @@ lede_bands:
   moderate: 35     # above this, "strongly"
 ```
 
-With every optional slot dropped, the sentence still stands on its own:
+With every optional slot dropped, the sentence still stands on its own. On a day below `explain.min_headlines` nothing was clustered, so the sentence claims nothing about themes:
 
 ```
-Financial news was roughly flat today (index +1.2) across 39 headlines,
-with no dominant theme.
+Financial news leaned moderately negative today (index -26.4) across 5
+headlines.
 ```
+
+On a day that was clustered with no qualifying cluster, it says so: "… across 15 headlines, with no dominant theme."
 
 ⚠️ **The template must never assert a driver it cannot evidence.** The "driven mainly by" clause appears only when a real cluster clears both thresholds. A sentence that names a theme on four loosely related headlines reads exactly like a sentence that names a real one, and the reader has no way to tell them apart. When in doubt the sentence gets shorter, never vaguer.
 
-Keep a small phrase bank (2–3 variants per slot, chosen by hash of the date) so consecutive days do not read identically. This is cosmetic, not semantic — variants must be interchangeable in meaning.
+Keep a small phrase bank (2–3 variants per slot, chosen by a `hashlib` digest of the date, never `hash()`, which is salted per process) so consecutive days do not read identically. This is cosmetic, not semantic — variants must be interchangeable in meaning.
 
 **This is what makes the report readable without the API.** The Claude narrative in T4.1, if you build it, replaces this one sentence with a paragraph. It does not replace the evidence blocks below it.
 
 ---
 
 **1. Contribution, added to Recommended articles.** T4.2 already lists the top negative and positive headlines by certainty. Within a sentiment that is the same ranking as contribution to the index, since each term is conf × s and |s| = 1. This block adds each item's share of the day's
-total movement: conf / Σ|confᵢ·sᵢ| over non-neutral headlines, computed from the terms stored in `daily_index` (T3.3). Neutral items keep certainty only, since their contribution is 0.
+total movement: conf / Σ|confᵢ·sᵢ| over non-neutral headlines, computed from the terms stored in `daily_index` (T3.3), so a frozen day uses its snapshot. Negative and positive items show it after certainty; neutral items keep certainty only, since their contribution is 0. Half-up rounding. The shown values are not normalized and need not sum to 100.
 
-When a sentiment has no headlines, print "no positive headlines today" rather than omitting the block. An absent section and an empty one mean
+When a sentiment has no headlines, print "no positive headlines today" rather than omitting the block, distinct from "only N today" for a shortfall. An absent section and an empty one mean
 different things. The section header keeps its caveat: highest model certainty, not most important.
 
-**2. Distinctive terms.** Reuse the **T1.4 TF-IDF vectorizer**. Score today's negative headlines against a trailing 30-day background and surface the terms that stand out. The baseline you built in Week 1 earns a second job here.
+**2. Distinctive terms.** Dropped; see §9 (2026-10-07). Its lift function survives only to name block 3's clusters.
 
-**3. Clusters.** Cosine similarity on the same TF-IDF vectors, agglomerative, distance threshold in config. For each cluster: size, sentiment split, and share of the day's tilt.
+**3. Clusters.** `AgglomerativeClustering(distance_threshold=explain.cluster_distance, metric="cosine", linkage="complete")` on today's rows, all sentiments, in the report's canonical order (confidence desc, `published_at`, id) so ties resolve the same way every run. Complete linkage, so no headline joins a theme by being close to just one member. For each cluster: size, sentiment split, and share = cluster Σ(conf·s) / day Σ|conf·s| (bounded ±100%, the same denominator as block 1). Clusters below `explain.min_cluster_size` are not shown.
 
-**4. Source skew.** Share of negative headlines from the single most represented outlet. A day where one wire dominates is a day the index reflects one newsroom. Rendered as one line under T4.2's Sources table, not a separate section.
+The cluster's name comes from its own rows, never the day's: up to `explain.cluster_name_terms` terms that appear in ≥ `explain.min_term_headlines` of its members, ranked by lift = mean TF-IDF over the members / mean over the background (D−30 … D−1), ties by term. While stored history (days since the store's first fetch) is shorter than `explain.background_days`, names rank by raw count instead; no disclosure line, since the name only labels a cluster that already cleared its floors.
 
-⚠️ **Say when there is nothing to say.** At ~47 headlines a day, distinctive-term extraction is noisy and clustering is coarse. Each block needs a floor — minimum headlines, minimum cluster size, minimum term lift — and prints an explicit "no clear theme today" when unmet. **Manufacturing a theme from four headlines is worse than printing nothing**, because the reader cannot tell the difference and will believe it.
+The vectorizer is configurable, `explain.vectorizer: window | phrasebank`, default `window`. `window` fits a `TfidfVectorizer` on day D **plus** the previous `explain.background_days` (30) of stored headlines, by `published_at` via `day_bounds`; today must be in the fit, or today's new words are out of vocabulary. Text goes through `clean_for_tfidf` (unchanged; LogReg shares it); `ngram_range` and `min_df` from `explain.window_ngram_range` (1, 2) and `explain.window_min_df` (2), `stop_words="english"`, `token_pattern=r"(?u)\b[^\W\d_][\w-]+\b"` (letter first, 2+ characters). Under the Clusters line the report prints "Themes use TF-IDF fit on N headlines (first date–D)." `phrasebank` loads the T1.4 `tfidf_vectorizer.joblib` and is dev-only: a missing file is a clear error naming `window`. In that mode the vocabulary line is today's unigram OOV rate instead, and above `explain.oov_warn` a suggestion to switch to `window` goes to stderr only. Evidence for the default is in §9.
 
-Until the trailing window has 30 days of history, block 2 degrades to raw term frequency and says so in the output.
+**4. Source skew.** Dropped; see §9 (2026-10-07).
 
-**Done when:** `pytest tests/test_explain.py` passes, including a case with 5 headlines where every block correctly declines to report and the lede degrades to its shortest form, and `newsmood report --offline` shows a populated lede and Why section on real data.
+⚠️ **Say when there is nothing to say.** At ~15 headlines a day (measured; Oct 2: 15), clustering is coarse. Block 3 has floors — `explain.min_headlines` (day total), `explain.min_cluster_size`, `explain.cluster_purity` for the driver — and prints an explicit "no clear theme today" when unmet. **Manufacturing a theme from four headlines is worse than printing nothing**, because the reader cannot tell the difference and will believe it.
+
+**Done when:** `pytest tests/test_explain.py` passes, including a case with 5 headlines where every block correctly declines to report and the lede degrades to its shortest form, and an Oct 2-style case (a 4-headline all-neutral cluster plus 7 scattered negatives) where the lede names no driver; and `newsmood report --offline` shows a populated lede and Why section on real data.
 
 ---
 
@@ -885,3 +888,18 @@ Append whenever reality differs. Date, task ID, what changed, why.
 | 2026-10-02 | T4.3 | When the report date is today (ET), `compute_days` is also given yesterday | Under T3.3's hybrid rule only requested days are computed. Without this, a late headline for yesterday would never reach yesterday's row once the run moves on to today |
 | 2026-10-02 | T4.3 | Feed failure doesn't block the report: a failed feed is a stderr warning and the rest still count; if all feeds fail, the report is built from stored data with a warning | T3.5's gates aren't built, so there is no rule to decide whether a partial run is publishable. Ingest and score are idempotent, so the stored data is still a valid basis. T3.5 adds blocking |
 | 2026-10-02 | T4.3 | Offline is the default; `--online` errors with "online mode not yet implemented (T4.1)" before any work | T4.1 isn't built. Failing loudly beats silently producing an offline report under an online flag. No path here reads `ANTHROPIC_API_KEY` |
+| 2026-10-07 | T4.2b | Lede counterweight slot dropped; the lede has three slots (direction + strength, change, driver) | With no confidence threshold since T3.3, "top mover on the opposite side above threshold" would fire nearly every day and name a trivial opposing headline |
+| 2026-10-07 | T4.2b | Block 4 (source skew) dropped. Supersedes the "source skew rendered under the Sources table" part of the 2026-10-02 T4.2b row, which stays as written | The Sources table already shows each outlet's negatives against its total. On Oct 2 a skew line ("5 of 7 negatives from marketwatch-top") read as negative skew when MarketWatch was 11 of 15 headlines overall |
+| 2026-10-07 | T4.2b | Change slot compares against the previous session: the most recent day in D−1 … D−5 (inclusive) with a stored `daily_index` row and `n_headlines ≥ 5` (`lede.prev_session_lookback_days`, `lede.prev_session_min_headlines`), not "yesterday". Weekend days qualify if they meet the floor. Delta from displayed 1-decimal moods; omitted below `lede.change_min_delta` (5). Missing candidates are computed by the index code, newest first, stopping at the first that qualifies (older days written once, empty days not stored); `ReportRun.lookback` lists them | Headlines per ET day, Sep 21–Oct 7: days with an ingest run had 12–29, days without (weekends and weekdays) 1–4, so counts reflect ingest timing more than news volume until T4.4. A floor of 5 separates them; Oct 7's previous session is Oct 2 (15), Oct 3–6 hold 1–3. Displayed values keep the printed delta and the printed moods consistent |
+| 2026-10-07 | T4.2b | Block 3 vectorizer is configurable (`explain.vectorizer: window \| phrasebank`), default `window`: `TfidfVectorizer` fit at report time on day D plus the previous 30 days of stored headlines (`ngram_range=(1, 2)`, `min_df=2`, English stop words, token pattern `(?u)\b[^\W\d_][\w-]+\b`: letter first, 2+ characters; `clean_for_tfidf` unchanged since LogReg shares it). `phrasebank` (T1.4's `tfidf_vectorizer.joblib`) is dev-only and fails with an error naming `window` when the file is missing. CLAUDE.md's "fit once… never fit a second one" narrowed: the LogReg baseline's vectorizer is fitted once on the training split and never refit; the window vectorizer in `reporting/explain.py` is separate and fitted per report run. `logreg.load_vectorizer`'s docstring matches | `scripts/oov_check.py` on stored headlines against the T1.4 vectorizer: 36.9% token OOV (726/1,966) and 53.5% type OOV (547/1,022) over 147 headlines (30 days); 34.5% token, 40.2% type over 16 headlines (7 days). Top missing: ai(23), fed(10), prediction, xi, trump, inflation, hike, traders, kalshi, nvidia, amd, yields, retirement, truce, warsh. The rule "switch if >20% or the top-20 missing are topical" was fixed before running; both halves fired. Also removes the vectorizer-storage question for Actions and pip installs (`/models/` is gitignored). scikit-learn stays core: `window` fits `TfidfVectorizer` and runs `AgglomerativeClustering` at report time. The T1.4 artifacts are now used only by `eval` and `phrasebank` mode. Today must be in the fit, or its new words are OOV. The token pattern first decided allowed 1-character tokens (`[\w-]*`); in calibration, curly apostrophes split "I’m" and "don’t" into lone `m` and `t`, which named two of the three size-3 clusters at distance 0.7 (Sep 25 "money, don, don t", Sep 29 "m"). Requiring 2+ characters, like scikit-learn's default, removes them |
+| 2026-10-07 | T4.2b | Driver = the cluster with the largest share of tilt in the mood's direction that meets `explain.min_cluster_size` and `explain.cluster_purity` (≥ 70% one sentiment, matching the mood's sign); omitted when none qualifies or the band is "roughly flat". Was "largest cluster" | On Oct 2 the largest cluster was 4 neutral retirement columns, which contribute 0 to the index. Size measures volume, not what moved the mood |
+| 2026-10-07 | T4.2b | Cluster share = cluster Σ(conf·s) / day Σ\|conf·s\|, bounded ±100%, the same denominator as block 1's contribution | The naive day Σ(conf·s) denominator approaches 0 on flat days, so one cluster's share explodes or flips sign |
+| 2026-10-07 | T4.2b | The Clusters line (block 3) and one vocabulary line render under "What happened", directly below the lede. Nothing goes under the Sources table | The lede names the driver; its evidence belongs next to it. The source-skew line that was to sit under Sources is dropped |
+| 2026-10-07 | T4.2b | `min_df=2` in `window` mode: a word that appears in only one headline in the whole 31-day window drops out of the vocabulary | Acceptable for a theme detector: a theme needs at least two headlines, and single-use words are mostly noise. Today's words still enter the fit, so a term in ≥ 2 of today's headlines is kept |
+| 2026-10-07 | T4.2b | "~47 headlines a day" corrected to ~15 (measured; Oct 2: 15) | The 47 figure predates live ingest. Ingest-run days held 12–29 headlines, Sep 21–Oct 7 |
+| 2026-10-07 | T4.2b | Block 1 renders as "· 12.3% of the day's movement" after certainty (1 decimal, half-up), and the footer gains one line defining it | Matches the 1-decimal shares in the pie line. The phrase needs one definition, since "contribution" alone doesn't say of what |
+| 2026-10-07 | T4.2b | Block 2 (distinctive terms) removed from the report. Its lift function is kept only to name block 3 clusters: up to `explain.cluster_name_terms` terms in ≥ `explain.min_term_headlines` of the cluster's own rows, by lift against the background, by raw count while history is shorter than `background_days` (no disclosure line). `min_term_lift`, `top_terms` and the raw-count fallback line removed. The guide keeps the block numbering, as for block 4 | Calibration on the six stored days with ≥ 8 headlines (Sep 22, 23, 25, 29, Oct 2, 7): only 3 terms reached ≥ 2 of a day's negatives in six days (Sep 23 "ai"; Oct 2 "lot", "stock", plus "s" before the token fix). Oct 2's block would have read "lot (3) · stock (2)", and "lot" scored infinite lift because the 113-row background lacked it. The days held 1–7 negatives; more history doesn't change the number of negatives per day |
+| 2026-10-07 | T4.2b | The OOV line is shown only in `phrasebank` mode (and the stderr advice to switch fires only there). In `window` mode the report prints "Themes use TF-IDF fit on N headlines (first date–D)." instead | In `window` mode, OOV measures words used once in the window (dropped by `min_df=2`), not a vocabulary mismatch: it read 47–76% on the six days while the background held 20–135 rows. It would alarm without informing, and advising a switch to `window` from `window` is meaningless. The fit line says what the themes rest on |
+| 2026-10-07 | T4.2b | Block 3 clusters: complete linkage, cosine, `explain.cluster_distance: 0.6`, `min_cluster_size: 3`, `min_headlines: 8`, `cluster_purity: 0.70`. Block 3 declines ("no clear theme today") on all six real days, and no lede names a driver yet. Re-check `cluster_distance` once T4.4 ingests every 4–6 h | Calibration at 0.6 / 0.7 / 0.8 (2-character tokens): every cluster at 0.6 was one story or one tight topic (the AI "hottest skill" story CNBC published twice; Fed minutes, Oct 7; retirement, Oct 2), all of size 2. At 0.7, Oct 2's AI-skills pair joined "Tesla sold a lot more EVs than Wall Street expected" on "wall street" alone (1 neg / 2 pos, +21.3%): a false theme. 0.8 joined on single words ("lot", "stock"). `min_cluster_size: 3` because the highest-share size-2 cluster was one story syndicated twice. `min_headlines: 8` sits in the measured gap (ingest days 12–29, others 1–4). ~15 headlines/day reflects one ingest a day; with more headlines per day, 0.6 may prove too tight |
+| 2026-10-07 | T4.2b | Lede theme clause has three cases: a qualifying cluster → "driven mainly by N headlines on <terms>"; clustering ran (day ≥ `explain.min_headlines`) and nothing qualified, or the band is "roughly flat" → "with no dominant theme"; day below `min_headlines` → the clause is omitted. Shortest form: "… (index -26.4) across 5 headlines." | On a day too thin to cluster nothing was examined, so "no dominant theme" would claim a check that never ran |
+| 2026-10-07 | T4.2b | Config keys beyond the planned set: `explain.min_term_headlines` (2), `window_ngram_range` ([1, 2]), `window_min_df` (2), `cluster_name_terms` (3). New store query `first_fetched_at`: "history" for cluster naming is days since the store's first fetch | CLAUDE.md: no thresholds in modules; the window vectorizer's settings sit in config like `logreg`'s. History can't come from `published_at`: Yahoo carries items from 2024, which would make a week-old store look years deep |

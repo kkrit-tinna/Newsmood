@@ -96,6 +96,20 @@ def _write_yaml_config(path: Path) -> None:
                 "finbert": {"repo_id": "yaml/finbert", "revision": _YAML_SHA, "batch_size": 1},
                 "index": {"timezone": "America/New_York", "low_confidence": 0.6},
                 "lede_bands": {"flat": 5, "mild": 15, "moderate": 35},
+                "lede": {"change_min_delta": 5, "prev_session_lookback_days": 5, "prev_session_min_headlines": 5},
+                "explain": {
+                    "vectorizer": "window",
+                    "oov_warn": 0.2,
+                    "background_days": 30,
+                    "min_headlines": 8,
+                    "min_cluster_size": 3,
+                    "cluster_purity": 0.7,
+                    "cluster_distance": 0.6,
+                    "min_term_headlines": 2,
+                    "window_ngram_range": [1, 2],
+                    "window_min_df": 2,
+                    "cluster_name_terms": 3,
+                },
                 "report": {
                     "recommended": {"negative": 3, "positive": 3, "neutral": 2},
                     "colors": {"negative": "#000001", "positive": "#000002", "neutral": "#000003"},
@@ -277,4 +291,12 @@ def test_env_override_of_revision_is_validated_too(tmp_path, monkeypatch):
     _point_settings_at_yaml(tmp_path, monkeypatch)
     monkeypatch.setenv("NEWSMOOD_MODEL__REVISION", "main")
     with pytest.raises(ValidationError, match="not a full 40-char commit SHA"):
+        Settings()
+
+
+def test_explain_vectorizer_must_be_window_or_phrasebank(tmp_path, monkeypatch):
+    _point_settings_at_yaml(tmp_path, monkeypatch)
+    assert Settings().explain.vectorizer == "window"
+    monkeypatch.setenv("NEWSMOOD_EXPLAIN__VECTORIZER", "bert")
+    with pytest.raises(ValidationError):
         Settings()

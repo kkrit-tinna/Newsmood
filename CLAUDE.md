@@ -49,9 +49,11 @@ a shortcut.
 - `reporting/aggregate.py` owns the mood index. Anything evaluating the
   index imports that function rather than reimplementing it.
 
-The TF-IDF vectorizer is fitted **once** in `baselines/logreg.py` on the
-training split and persisted. `reporting/explain.py` loads that same
-vectorizer for distinctive terms and clustering. Never fit a second one.
+The LogReg baseline's TF-IDF vectorizer is fitted **once** in
+`baselines/logreg.py` on the training split and persisted. Never refit it.
+The window vectorizer in `reporting/explain.py` (`explain.vectorizer:
+window`, the default) is separate: it is fitted per report run on the
+report day plus the trailing background window, and never persisted.
 
 ## Storage
 One SQLite file at `data/newsmood.db`, not committed. 

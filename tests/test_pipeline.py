@@ -18,6 +18,7 @@ from newsmood.config import FeedSettings, StoreSettings, get_settings
 from newsmood.data import store
 from newsmood.reporting import pipeline
 from newsmood.reporting.aggregate import compute_days, day_bounds
+from newsmood.reporting.explain import build_explanation
 from newsmood.reporting.report_data import build_report_data
 from newsmood.reporting.template import render
 
@@ -118,7 +119,10 @@ def expected_report(settings, day: date, now=NOW) -> str:
     with closing(store.connect(settings.store.db_path)) as conn:
         (result,) = compute_days(conn, [day], settings, now=now)
         rows = store.scored_headlines_between(conn, *day_bounds(day, tz))
-    return render(build_report_data(result, rows, settings))
+        data = build_report_data(result, rows, settings)
+        lookup, _ = pipeline.session_lookup(conn, settings, now, (result,))
+        themes = pipeline.theme_inputs(conn, settings, result, rows)
+        return render(data, build_explanation(data, settings, lookup=lookup, themes=themes))
 
 
 def daily_row(settings, day: str):
@@ -349,3 +353,51 @@ def test_cli_rejects_bad_requests_without_touching_store(settings, monkeypatch, 
     assert result.exit_code == 2
     assert result.stdout == ""
     assert message in " ".join(result.stderr.split())
+
+
+# --- previous session for the lede (T4.2b) ---
+
+
+def test_lede_previous_session_skips_thin_day_and_writes_older_candidate(settings, fake_feeds, classifier, out_dir):
+    # Oct 1 holds 1 headline (below prev_session_min_headlines); Sep 30 holds 5.
+    for i in range(5):
+        fake_feeds.add(URL_A, f"Up story {i}", utc(f"2026-09-30T1{i}:00:00-04:00"))
+    r = run(settings, fake_feeds, classifier, out_dir)
+    assert [(d.date.isoformat(), d.action) for d in r.lookback] == [("2026-09-30", "written")]
+    assert daily_row(settings, "2026-09-30")["n_headlines"] == 5
+    text = r.path.read_text(encoding="utf-8")
+    assert "96.5" in text and "Wed Sep 30" in text  # +3.5 today vs +100.0 on Sep 30
+    assert text == expected_report(settings, date(2026, 10, 2))
+
+
+def test_lede_lookback_stores_no_empty_days(settings, fake_feeds, classifier, out_dir):
+    r = run(settings, fake_feeds, classifier, out_dir)
+    # Oct 1 came from this run's own compute; Sep 27-30 have no headlines.
+    assert [(d.date.isoformat(), d.action) for d in r.lookback] == [(f"2026-09-{d}", "empty") for d in (30, 29, 28, 27)]
+    assert all(daily_row(settings, f"2026-09-{d}") is None for d in (27, 28, 29, 30))
+    assert "(index +3.5)" in r.path.read_text(encoding="utf-8")  # no previous session, no change clause
+
+
+def test_window_mode_report_has_fit_line_and_no_oov_line(settings, fake_feeds, classifier, out_dir):
+    text = run(settings, fake_feeds, classifier, out_dir).path.read_text(encoding="utf-8")
+    # 3 headlines on Oct 2 plus the Oct 1 one in the background window.
+    assert "_Themes use TF-IDF fit on 4 headlines (2026-10-01–2026-10-02)._" in text
+    assert "outside it" not in text
+
+
+def test_phrasebank_oov_advice_goes_to_stderr_not_the_report(settings, fake_feeds, classifier, out_dir, tmp_path, capsys):
+    import joblib
+    from sklearn.feature_extraction.text import TfidfVectorizer
+
+    artifacts = tmp_path / "baselines"
+    artifacts.mkdir()
+    joblib.dump(TfidfVectorizer().fit(["profit rose", "sales fell"]), artifacts / "tfidf_vectorizer.joblib")
+    settings = settings.model_copy(update={
+        "explain": settings.explain.model_copy(update={"vectorizer": "phrasebank"}),
+        "logreg": settings.logreg.model_copy(update={"artifact_dir": str(artifacts)}),
+    })
+    text = run(settings, fake_feeds, classifier, out_dir).path.read_text(encoding="utf-8")
+    err = capsys.readouterr().err
+    assert "consider explain.vectorizer: window" in err
+    assert "PhraseBank baseline's vocabulary: 100.0% of this day's words" in text
+    assert "explain.vectorizer" not in text and "Themes use TF-IDF fit" not in text
