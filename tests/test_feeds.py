@@ -96,6 +96,20 @@ def test_all_punctuation_title_is_skipped():
     assert [h.title for h in headlines] == ["Real one"]
 
 
+def test_offset_less_pubdate_is_read_as_utc():
+    # investing-stocks sends "2026-10-08 15:42:29" with no offset. The feed's
+    # clock is UTC (docs/sources.md, 2026-10-09); feedparser reads a naive
+    # date as UTC, and this pins that, since a wrong offset moves headlines
+    # to the wrong ET day.
+    body = (
+        b'<?xml version="1.0"?><rss version="2.0"><channel><title>t</title>'
+        b"<item><title>US stocks open higher</title><link>https://i.test/1</link>"
+        b"<pubDate>2026-10-08 15:42:29</pubDate></item></channel></rss>"
+    )
+    (h,), _ = parse_feed(body, "investing-stocks", FETCHED_AT)
+    assert h.published_at == datetime(2026, 10, 8, 15, 42, 29, tzinfo=timezone.utc)
+
+
 def test_fetch_all_is_sequential_polite_and_isolates_failures():
     calls, sleeps = [], []
 

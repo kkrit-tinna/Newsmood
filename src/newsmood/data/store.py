@@ -190,6 +190,25 @@ def first_fetched_at(conn: sqlite3.Connection) -> datetime | None:
     return None if value is None else datetime.fromisoformat(value)
 
 
+def last_fetched_at(conn: sqlite3.Connection) -> datetime | None:
+    """The newest fetched_at in the store, or None when empty. A row keeps its
+    first-seen fetched_at, so this moves only when ingest stores something new
+    (T3.5's pipeline_fresh gate)."""
+    value = conn.execute("SELECT max(fetched_at) FROM headlines").fetchone()[0]
+    return None if value is None else datetime.fromisoformat(value)
+
+
+def unscored_between(conn: sqlite3.Connection, start: datetime, end: datetime) -> int:
+    """How many rows with start <= published_at < end still have no label: the
+    rows scored_rows_between would show once scored (T3.5's all_scored gate)."""
+    sql = """
+        SELECT count(*) FROM headlines
+        WHERE published_at IS NOT NULL AND label IS NULL
+          AND published_at >= ? AND published_at < ?
+    """
+    return conn.execute(sql, (_ts(start), _ts(end))).fetchone()[0]
+
+
 def get_daily_index(conn: sqlite3.Connection, date: str) -> dict[str, Any] | None:
     """The stored row for one YYYY-MM-DD, JSON columns decoded, or None."""
     row = conn.execute("SELECT * FROM daily_index WHERE date = ?", (date,)).fetchone()

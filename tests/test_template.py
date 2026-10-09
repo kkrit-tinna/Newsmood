@@ -9,6 +9,7 @@ from __future__ import annotations
 import dataclasses
 from datetime import date
 
+from newsmood.evaluation.gates import GateSummary
 from newsmood.reporting.report_data import Headline, RecommendedGroup, ReportData, SentimentSlice, SourceRow
 from newsmood.reporting.template import render
 
@@ -55,7 +56,7 @@ def report(**overrides) -> ReportData:
         ),
         headlines=(A1, A2, A3, A5, A4),
         model_id=MID,
-        gates="not yet implemented",
+        gates=GateSummary(n_passed=2, n_applicable=2, n_not_applicable=0, notes=()),
     )
     return dataclasses.replace(base, **overrides)
 
@@ -68,7 +69,7 @@ Certainty is the model's confidence in its label; below 60% it is marked unsure.
 
 Links go to the original publisher; some limit free articles.
 
-Model: {MID} · Gates: not yet implemented · Not financial advice.
+Model: {MID} · Gates: 2/2 passed · Not financial advice.
 """
 
 GOLDEN = (

@@ -50,6 +50,12 @@ class IngestSettings(BaseModel):
     feeds: list[FeedSettings]
 
 
+class GatesSettings(BaseModel):
+    max_feed_staleness_hours: float
+    max_single_source_share: float
+    max_low_confidence_rate: float
+
+
 class StoreSettings(BaseModel):
     db_path: str
 
@@ -175,6 +181,7 @@ class Settings(BaseSettings):
     vader: VaderSettings
     logreg: LogregSettings
     ingest: IngestSettings
+    gates: GatesSettings
     store: StoreSettings
     training: TrainingSettings
     model: ModelSettings

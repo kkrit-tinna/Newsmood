@@ -37,6 +37,7 @@ from typing import Any, Iterable, Mapping
 from urllib.parse import urlsplit
 
 from newsmood.config import LedeBandsSettings, Settings
+from newsmood.evaluation.gates import GateSummary
 from newsmood.reporting.aggregate import DayResult
 
 # Display order for the pie, recommended articles and the full list.
@@ -110,7 +111,9 @@ class ReportData:
     sources: tuple[SourceRow, ...]
     headlines: tuple[Headline, ...]
     model_id: str  # repo_id@revision, as stored
-    gates: str  # T3.5 replaces this with a passed/total summary
+    # T3.5: blocks passed and fired disclosures. None only when built outside
+    # the pipeline (tests); the footer then says the gates were not evaluated.
+    gates: GateSummary | None
 
     @property
     def is_empty(self) -> bool:
@@ -118,7 +121,7 @@ class ReportData:
 
 
 def build_report_data(
-    result: DayResult, rows: Iterable[Mapping[str, Any]], settings: Settings
+    result: DayResult, rows: Iterable[Mapping[str, Any]], settings: Settings, *, gates: GateSummary | None = None
 ) -> ReportData:
     """The finished, immutable numbers for one day's report.
 
@@ -170,7 +173,7 @@ def build_report_data(
         sources=sources,
         headlines=tuple(headlines),
         model_id=result.model_id,
-        gates="not yet implemented",
+        gates=gates,
     )
 
 

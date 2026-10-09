@@ -113,13 +113,14 @@ def run(settings, fake_feeds, classifier, out_dir, *, now=NOW, date_arg=None, **
     )
 
 
-def expected_report(settings, day: date, now=NOW) -> str:
-    """What the report must be, rebuilt from the store by the T4.2 functions."""
+def expected_report(settings, day: date, gates, now=NOW) -> str:
+    """What the report must be, rebuilt from the store by the T4.2 functions.
+    `gates` is the run's GateReport: its summary is the one input not in the store."""
     tz = ZoneInfo(settings.index.timezone)
     with closing(store.connect(settings.store.db_path)) as conn:
         (result,) = compute_days(conn, [day], settings, now=now)
         rows = store.scored_headlines_between(conn, *day_bounds(day, tz))
-        data = build_report_data(result, rows, settings)
+        data = build_report_data(result, rows, settings, gates=gates.summary())
         lookup, _ = pipeline.session_lookup(conn, settings, now, (result,))
         themes = pipeline.theme_inputs(conn, settings, result, rows)
         return render(data, build_explanation(data, settings, lookup=lookup, themes=themes))
@@ -137,13 +138,14 @@ def test_full_run_writes_report_matching_render_of_build(settings, fake_feeds, c
     r = run(settings, fake_feeds, classifier, out_dir)
     assert r.path == out_dir / "2026-10-02.md"
     text = r.path.read_text(encoding="utf-8")
-    assert text == expected_report(settings, date(2026, 10, 2))
+    assert text == expected_report(settings, date(2026, 10, 2), r.gates)
     assert r.result.day.n_headlines == 3
     assert "Up stocks rally on earnings" in text
     assert "Up bank shares climb late" not in text  # Oct 1 in ET
     assert sorted(fake_feeds.calls) == [URL_A, URL_B]
     assert len(classifier.seen) == 4
-    assert [p.name for p in out_dir.iterdir()] == ["2026-10-02.md"]  # no temp file left
+    assert sorted(p.name for p in out_dir.iterdir()) == ["2026-10-02.md", "quality"]  # no temp file left
+    assert [p.name for p in (out_dir / "quality").iterdir()] == ["2026-10-02.json"]
 
 
 def test_output_dir_defaults_to_report_output_dir(settings, fake_feeds, classifier, tmp_path):
@@ -164,8 +166,8 @@ def test_rerun_with_no_new_headlines_is_byte_identical(settings, fake_feeds, cla
 def test_rerun_overwrites_existing_report(settings, fake_feeds, classifier, out_dir):
     out_dir.mkdir()
     (out_dir / "2026-10-02.md").write_text("stale\n")
-    path = run(settings, fake_feeds, classifier, out_dir).path
-    assert path.read_text(encoding="utf-8") == expected_report(settings, date(2026, 10, 2))
+    r = run(settings, fake_feeds, classifier, out_dir)
+    assert r.path.read_text(encoding="utf-8") == expected_report(settings, date(2026, 10, 2), r.gates)
 
 
 def test_late_headline_for_frozen_day_keeps_frozen_mood_and_notes_it(settings, fake_feeds, classifier, out_dir):
@@ -271,20 +273,24 @@ def test_one_feed_failing_still_writes_report(settings, fake_feeds, classifier, 
     assert "warning: feed feed-b failed" in err
     assert "1/2 feeds live" in err
     assert r.result.day.n_headlines == 2  # feed-a's two Oct 2 items
-    assert r.path.read_text(encoding="utf-8") == expected_report(settings, date(2026, 10, 2))
+    assert r.path.read_text(encoding="utf-8") == expected_report(settings, date(2026, 10, 2), r.gates)
 
 
 def test_all_feeds_failing_builds_report_from_stored_data(settings, fake_feeds, classifier, out_dir, capsys):
     run(settings, fake_feeds, classifier, out_dir)
-    before = (out_dir / "2026-10-02.md").read_bytes()
+    before = (out_dir / "2026-10-02.md").read_text(encoding="utf-8")
     capsys.readouterr()
 
+    # Stored rows are 0 h old, inside gates.max_feed_staleness_hours, so
+    # pipeline_fresh passes and the outage is disclosed, not blocked (T3.5).
     fake_feeds.failing |= {URL_A, URL_B}
     r = run(settings, fake_feeds, classifier, out_dir)
     err = capsys.readouterr().err
     assert "warning: all 2 feeds failed" in err
     assert r.result.day.n_headlines == 3
-    assert r.path.read_bytes() == before
+    text = r.path.read_text(encoding="utf-8")
+    assert "0 of 2 feeds responded." in text and "feeds responded" not in before
+    assert text == expected_report(settings, date(2026, 10, 2), r.gates)
 
 
 def test_empty_day_writes_no_headlines_report(settings, fake_feeds, classifier, out_dir):
@@ -367,7 +373,7 @@ def test_lede_previous_session_skips_thin_day_and_writes_older_candidate(setting
     assert daily_row(settings, "2026-09-30")["n_headlines"] == 5
     text = r.path.read_text(encoding="utf-8")
     assert "96.5" in text and "Wed Sep 30" in text  # +3.5 today vs +100.0 on Sep 30
-    assert text == expected_report(settings, date(2026, 10, 2))
+    assert text == expected_report(settings, date(2026, 10, 2), r.gates)
 
 
 def test_lede_lookback_stores_no_empty_days(settings, fake_feeds, classifier, out_dir):

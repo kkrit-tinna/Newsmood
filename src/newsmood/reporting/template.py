@@ -10,6 +10,7 @@ since every title and url may land in a table cell.
 
 from __future__ import annotations
 
+from newsmood.evaluation.gates import GateResult, GateSummary
 from newsmood.reporting.explain import Cluster, Explanation
 from newsmood.reporting.report_data import Headline, RecommendedGroup, ReportData
 
@@ -32,6 +33,8 @@ def render(data: ReportData, explanation: Explanation | None = None) -> str:
     parts = [f"# Newsmood — {data.date.isoformat()}"]
     if data.is_empty:
         parts.append("No headlines for this date.")
+        if notes := _data_notes(data.gates):
+            parts.append(notes)
     else:
         parts += [
             _header(data),
@@ -56,7 +59,42 @@ def _header(data: ReportData) -> str:
             f"\n\n_{_plural(data.n_late, 'later headline')} for this date arrived after its index was "
             f"frozen and {'is' if data.n_late == 1 else 'are'} not counted._"
         )
+    if notes := _data_notes(data.gates):
+        line += "\n\n" + notes
     return line
+
+
+def _data_notes(gates: GateSummary | None) -> str:
+    """One italic line, a phrase per fired disclosure (T3.5); "" when none fired."""
+    if gates is None or not gates.notes:
+        return ""
+    return "_Data notes: " + " ".join(_note(g) for g in gates.notes) + "_"
+
+
+def _note(g: GateResult) -> str:
+    o = g.observed
+    if g.name == "thin_day":
+        return f"Thin day: {_plural(o['headlines'], 'headline')}."
+    if g.name == "feeds_down":
+        return f"{o['responded']} of {o['configured']} feeds responded."
+    if g.name == "single_source":
+        return f"{o['share_pct']}% of headlines from {_text(o['source'])}."
+    if g.name == "low_confidence":
+        return f"The model was unsure on {o['unsure']} of {o['headlines']}."
+    if g.name == "stale_feed":
+        return f"{_join(_text(n) for n in o['stale'])} had nothing newer than {g.threshold:g} h."
+    raise ValueError(f"no data-note phrase for gate {g.name!r}")
+
+
+def _gates(gates: GateSummary | None) -> str:
+    if gates is None:
+        return "not evaluated"
+    text = f"{gates.n_passed}/{gates.n_applicable} passed"
+    if gates.n_not_applicable:
+        text += f", {gates.n_not_applicable} not applicable"
+    if gates.notes:
+        text += f" · {_plural(len(gates.notes), 'data note')}"
+    return text
 
 
 def _glance(data: ReportData) -> str:
@@ -154,7 +192,7 @@ def _footer(data: ReportData) -> str:
         f"Certainty is the model's confidence in its label; below {data.low_confidence_pct}% it is marked unsure.\n\n"
         f"{MOVEMENT_NOTE}\n\n"
         f"{PUBLISHER_NOTE}\n\n"
-        f"Model: {data.model_id} · Gates: {data.gates} · Not financial advice."
+        f"Model: {data.model_id} · Gates: {_gates(data.gates)} · Not financial advice."
     )
 
 
@@ -169,6 +207,11 @@ def _certainty(h: Headline) -> str:
 
 def _contribution(h: Headline) -> str:
     return "" if h.contribution_pct is None else f" · {h.contribution_pct:.1f}% of the day's movement"
+
+
+def _join(names) -> str:
+    names = list(names)
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
 
 
 def _plural(n: int, noun: str) -> str:

@@ -99,7 +99,8 @@ def report(
     date: str = typer.Option(None, "--date", help="ET calendar day, YYYY-MM-DD. Default: today in America/New_York."),
     offline: bool = typer.Option(True, "--offline/--online", help="Offline is the default and the only mode until T4.1."),
 ):
-    """Ingest, score, index and write reports/{date}.md. Prints the report's path."""
+    """Ingest, score, index and write reports/{date}.md. Prints the report's path.
+    Exits 1, naming the gate on stderr, when a quality gate blocks the run."""
     # Imported here, not at module top: scoring imports torch, and
     # `newsmood ingest` should not pay for it.
     from newsmood.reporting import pipeline
@@ -108,6 +109,9 @@ def report(
         run = pipeline.run_report(get_settings(), date_arg=date, offline=offline)
     except pipeline.ReportError as e:
         raise typer.BadParameter(str(e))
+    except pipeline.GateBlocked as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(1)
     print(run.path)
 
 

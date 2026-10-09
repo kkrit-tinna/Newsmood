@@ -561,19 +561,35 @@ Publishing the number that makes your model look worse is what separates this fr
 **Depends on:** T3.3
 **Commit:** `feat: quality-gates`
 
-`evaluation/gates.py`. Each gate returns pass/fail plus the observed value. **A failing gate aborts before the Claude call and before the report is written.** A pipeline that publishes a confident report from three headlines is worse than one that stops.
+`evaluation/gates.py`, pure. Each gate returns its status plus the observed value. **Block broken runs, disclose thin days.** T3.3 already decided a thin day is shown with its n, not hidden, so thinness never blocks. (Revised Oct 9: the original six gates blocked about half of real ingest days. §9, 2026-10-09.)
+
+**Blocks.** A failing block aborts before the index is written, before the report, and before any future Claude call. The CLI exits 1 and names the gate on stderr.
+
+| Gate | Fails when | Key |
+|---|---|---|
+| `pipeline_fresh` | today's run only: the newest stored `fetched_at` is ≥ 36 h old at the injected clock. A past `--date` run reports `not_applicable` (backfills read stored data, T4.3) | `gates.max_feed_staleness_hours` |
+| `all_scored` | any row in day D's window still has `label IS NULL` after the score step | — |
+
+**Disclosures.** Never block. Each one that fires adds a phrase to one italic "Data notes" line under the header.
+
+| Gate | Fires when | Phrase |
+|---|---|---|
+| `thin_day` | n < `explain.min_headlines` (8) | "Thin day: 6 headlines." |
+| `feeds_down` | fewer feeds responded this run than are configured | "1 of 2 feeds responded." |
+| `single_source` | one source's share of n > `gates.max_single_source_share` (0.70) | "73% of headlines from marketwatch-top." |
+| `low_confidence` | low-confidence share of n > `gates.max_low_confidence_rate` (0.50) | "The model was unsure on 8 of 13." |
+| `stale_feed` | a responding feed's newest item is ≥ `gates.max_feed_staleness_hours` old | "cnbc-finance had nothing newer than 36 h." |
 
 ```yaml
 gates:
-  min_headlines: 15
-  max_duplicate_rate: 0.40
-  min_sources_responding: 2
-  max_low_confidence_rate: 0.50
-  max_single_source_share: 0.70
   max_feed_staleness_hours: 36
+  max_single_source_share: 0.70
+  max_low_confidence_rate: 0.50
 ```
 
-Write `quality_report.json` every run, pass or fail.
+`feeds_down` and `stale_feed` are `not_applicable` on a past `--date`, like `pipeline_fresh`. Day gates are `not_applicable` on an empty day, and when a block fails first (they need the index, which a blocked run doesn't write). The footer reads e.g. "Gates: 2/2 passed · 2 data notes"; `ReportData.gates` carries the finished values and `template.py` only formats them.
+
+Write `{report.output_dir}/quality/{date}.json` every run, pass or fail: each gate's name, kind (block/disclose), observed value, threshold, threshold key and status (`pass` / `fail` / `fired` / `not_applicable`), plus `run_at`. Sorted keys, gates in fixed order; observed values are timestamps, not ages, so a re-run differs only in `run_at`.
 
 **Done when:** `pytest tests/test_gates.py` passes, with a test per gate that deliberately feeds it failing data. **These tests matter more than any others in the repo** — an untested gate waves the bad run through.
 
@@ -672,7 +688,7 @@ The footer's model id and revision are what make a report from six weeks ago int
 **Depends on:** T4.2, T2.5, T3.3
 **Commit:** `feat: automated-report-generation`
 
-`newsmood report [--date YYYY-MM-DD] [--offline]` runs ingest → score → index → write, and is safe to re-run for the same date. Gates (T3.5) slot in before the write once built; until then nothing blocks it. The flow lives in `reporting/pipeline.py`'s `run_report()`; `cli.py` only parses flags and prints the path.
+`newsmood report [--date YYYY-MM-DD] [--offline]` runs ingest → score → index → write, and is safe to re-run for the same date. Gates (T3.5) run after scoring: a failing block stops the run before the index and the report, and disclosures go into the report. The flow lives in `reporting/pipeline.py`'s `run_report()`; `cli.py` only parses flags and prints the path.
 
 - **Date**: defaults to today in `index.timezone` (America/New_York), from an injectable clock, never `date.today()`. A malformed or future `--date` is rejected before any I/O.
 - **Index**: `compute_days` gets the requested date; when that date is today, yesterday too, so late headlines still update it under T3.3's hybrid rule. Since T4.2b, the lede's previous-session lookup also computes any candidate day in D−1 … D−`lede.prev_session_lookback_days` that has no stored row, newest first, stopping at the first that qualifies: older days are written once, empty days are not stored.
@@ -774,7 +790,7 @@ Run `newsmood report --offline` unless the online path is done. `.github/workflo
 
 ⚠️ **Needs a long session — scheduled for Sunday Oct 18.** Budget 45–60 minutes. First-run YAML iteration always overruns, and each attempt costs a push and a wait you cannot shorten.
 
-**Done when:** a manual `workflow_dispatch` produces a committed report, and a run with `min_headlines` temporarily set to 9999 fails visibly with the gate named.
+**Done when:** a manual `workflow_dispatch` produces a committed report, and a run with `NEWSMOOD_GATES__MAX_FEED_STALENESS_HOURS=0` in its environment fails visibly with `pipeline_fresh` named. (Staleness compares age ≥ threshold, so 0 blocks even a run that just fetched new rows.)
 
 ---
 
@@ -827,7 +843,7 @@ Keep these in the README under "Engineering notes."
 - **Nested-config leakage avoided.** The four phrasebank configs are supersets; training on 50agree and testing on allagree is training on your test set. Documented in T1.2 and enforced by the split policy.
 - **Out-of-domain honesty.** T3.4 hand-labels real headlines and publishes the drop. This is the answer to "how do you know it works in production," and it is a question most student projects cannot answer at all.
 - **Right tool per job.** The fine-tuned model classifies; the LLM writes prose; Python does the arithmetic. Each does the thing it is reliable at.
-- **Gates with teeth, and tests for every gate.** The pipeline refuses to publish a confident report from thin data.
+- **Gates with teeth, and tests for every gate.** The pipeline refuses to publish when it is broken, and discloses when the data is thin.
 - **Cost measured, not estimated.** `reports/costs.jsonl` is the receipt.
 - **Rightsizing, again.** No cloud, no cluster, no GPU. A few MB of text a month does not need infrastructure, and knowing when *not* to reach for it is a screened-for skill.
 
@@ -911,3 +927,13 @@ Append whenever reality differs. Date, task ID, what changed, why.
 | 2026-10-07 | T4.2b | Lede theme clause has three cases: a qualifying cluster → "driven mainly by N headlines on <terms>"; clustering ran (day ≥ `explain.min_headlines`) and nothing qualified, or the band is "roughly flat" → "with no dominant theme"; day below `min_headlines` → the clause is omitted. Shortest form: "… (index -26.4) across 5 headlines." | On a day too thin to cluster nothing was examined, so "no dominant theme" would claim a check that never ran |
 | 2026-10-07 | T4.2b | Config keys beyond the planned set: `explain.min_term_headlines` (2), `window_ngram_range` ([1, 2]), `window_min_df` (2), `cluster_name_terms` (3). New store query `first_fetched_at`: "history" for cluster naming is days since the store's first fetch | CLAUDE.md: no thresholds in modules; the window vectorizer's settings sit in config like `logreg`'s. History can't come from `published_at`: Yahoo carries items from 2024, which would make a week-old store look years deep |
 | 2026-10-08 | schedule | Timeline extended: release moves from Sun Oct 18 to Thu Oct 22, buffer Fri Oct 23. Sessions are ~30 min Oct 9–14; no sessions Oct 8, Oct 10–11, Oct 15–16. T3.5 → Fri Oct 9 (review Mon Oct 12). T3.4 split into labeling (Tue Oct 13, one sitting) and analysis (Wed Oct 14). T4.4 → Sat Oct 17, T4.5 → Sun Oct 18, T2.6 / README / T3.7 → Oct 19–21. T3.6 (Reddit) dropped. T4.1 and online wiring deferred until after release | School deadlines and the Oct 15 career fair. T3.4 goes before the fair because live-headline accuracy is the project's strongest result; only its analysis is split off, labeling stays one sitting. T4.4 needs T3.5 and doesn't fit 30-minute slots. T3.6 was always first to drop |
+| 2026-10-09 | T3.5 | Gates split into blocks and disclosures. Blocks: `pipeline_fresh` (today's run, newest stored `fetched_at` ≥ `gates.max_feed_staleness_hours`) and `all_scored`. Disclosures, shown in a "Data notes" line under the header: `thin_day`, `feeds_down`, `single_source`, `low_confidence`, `stale_feed`. `min_headlines: 15`, `min_sources_responding: 2` and the blocking `max_single_source_share` are gone | Written before T3.3. On real data `min_headlines: 15` blocked about half of ingest days, `max_single_source_share: 0.70` blocked Oct 2 (MarketWatch 11 of 15), and with two feeds left `min_sources_responding: 2` blocked on any single outage. T3.3 shows thin days with their n rather than hiding them, so the gates block broken runs and disclose thin days |
+| 2026-10-09 | T3.5 | `max_duplicate_rate` dropped | Stored duplicates are impossible (`UNIQUE(title_norm)`), and the per-run duplicate rate is ~100% on any re-run, so the gate could only ever fire on a legitimate re-run |
+| 2026-10-09 | T3.5 | `thin_day` reads `explain.min_headlines` (8); there is no `gates.thin_day_headlines` key | Same value, same meaning (too thin to cluster). One key, so the disclosure and the cluster floor can't drift apart |
+| 2026-10-09 | T3.5 | Staleness compares age ≥ threshold, not age > threshold, for `pipeline_fresh` and `stale_feed` | T4.4's forced failure sets the threshold to 0. A run that just stored new rows has a newest `fetched_at` exactly 0 h old, which "older than 0" passes. Checked: `test_t44_env_override_trips_pipeline_fresh_even_with_fresh_rows` fails under the `>` mutation |
+| 2026-10-09 | T3.5 | Blocks are evaluated after scoring and before `compute_days`. On a block, day gates (`thin_day`, `single_source`, `low_confidence`) are `not_applicable` in the JSON; feed gates are still evaluated | A past day's index row is frozen once written. Computing it before `all_scored` blocks would freeze a day missing the rows that failed to score. Feed gates need no index and explain a `pipeline_fresh` block |
+| 2026-10-09 | T3.5 | `feeds_down` and `stale_feed` are `not_applicable` on a past `--date`, like `pipeline_fresh`. Day gates are `not_applicable` on an empty day | A backfill reads stored data (T4.3); today's feed outage says nothing about that day, and printing it would make a past date's report change between re-runs. An empty day already renders "No headlines for this date." |
+| 2026-10-09 | T3.5 | `quality/{date}.json` goes under `report.output_dir`, with a `threshold_key` per gate and `blocked` at the top. Observed staleness is the newest timestamp, not an age. The CLI exits 1 on a block (2 stays for a rejected request). Footer: "Gates: 2/2 passed · 2 data notes", "1/1 passed, 1 not applicable" on a past date | Ages change with the clock, so a re-run's JSON would differ in more than `run_at`. `threshold_key` tells the T3.7 runbook which key to look at. Exit 1 separates "the pipeline refused" from "the request was malformed" |
+| 2026-10-09 | T3.5 | New store queries `last_fetched_at` and `unscored_between` | Inputs for `pipeline_fresh` and `all_scored`. `store.py` stays the only module that imports `sqlite3` |
+| 2026-10-09 | T3.5 | T4.4 Done-when: the forced failure is `NEWSMOOD_GATES__MAX_FEED_STALENESS_HOURS=0`, not `min_headlines: 9999`. §8's "Gates with teeth" line now reads "refuses to publish when it is broken, and discloses when the data is thin" | Thin days only disclose now, so `min_headlines: 9999` can't fail a run |
+| 2026-10-09 | T3.5 | Feeds: `yahoo-finance` removed from config (its stored rows stay); `investing-stocks` (`investing.com/rss/news_25.rss`) added last. **The index's source mix changes from Oct 9**: days before are cnbc-finance + marketwatch-top (+ Yahoo through Sep 23); from Oct 9 on, cnbc-finance + marketwatch-top + investing-stocks | Yahoo was stale from Sep 23 and returned HTTP 404 on Oct 7 and Oct 8. Investing.com: fresh, 10 items per fetch, Reuters and Investing.com staff. Its offset-less pubDate is UTC (docs/sources.md) and feedparser reads it as UTC, so no conversion was added; `test_offset_less_pubdate_is_read_as_utc` pins it. No templated close-of-trade headlines in the probe fetches, so no `ingest.title_exclude_patterns` |

@@ -54,7 +54,7 @@ def report(settings, day=FIRST_VARIANTS_DAY, mood=-26.4, n=15) -> ReportData:
         sources=(),
         headlines=(),
         model_id=MID,
-        gates="not yet implemented",
+        gates=None,
     )
 
 
@@ -194,7 +194,7 @@ from newsmood.reporting.report_data import ReportData, band_label
 s = get_settings()
 for k in range(20):
     d = date(2026, 10, 1) + timedelta(days=k)
-    data = ReportData(d, -26.4, band_label(-26.4, s.lede_bands), 15, 2, 0, 0, 60, (), (), (), (), (), "m", "g")
+    data = ReportData(d, -26.4, band_label(-26.4, s.lede_bands), 15, 2, 0, 0, 60, (), (), (), (), (), "m", None)
     print(build_lede(data, previous=PreviousSession(d - timedelta(days=1), -10.0, 12), change=-16.4, driver=None, clustered=True))
 """
 

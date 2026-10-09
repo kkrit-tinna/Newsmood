@@ -49,15 +49,33 @@ ingest:
   timeout_seconds: 15
   delay_seconds: 2
   # Order matters: on a title_norm collision the first feed listed keeps the
-  # row (source, url, summary). yahoo-finance goes last — it has no summaries
-  # and is the stalest feed. IMPLEMENTATION_GUIDE.md §9, 2026-09-25.
+  # row (source, url, summary). IMPLEMENTATION_GUIDE.md §9, 2026-09-25.
+  # yahoo-finance was removed on 2026-10-09 (HTTP 404 on Oct 7 and 8); its
+  # stored rows stay. investing-stocks joined the same day, last in order.
+  # Its pubDate carries no offset and is UTC (docs/sources.md); feedparser
+  # reads an offset-less date as UTC, so no conversion is needed.
   feeds:
     - name: cnbc-finance
       url: https://www.cnbc.com/id/10000664/device/rss/rss.html
     - name: marketwatch-top
       url: https://feeds.content.dowjones.io/public/rss/mw_topstories
-    - name: yahoo-finance
-      url: https://finance.yahoo.com/news/rssindex
+    - name: investing-stocks
+      url: https://www.investing.com/rss/news_25.rss
+
+gates:
+  # Quality gates (T3.5): block broken runs, disclose thin days.
+  # IMPLEMENTATION_GUIDE.md T3.5 and §9, 2026-10-09.
+  # Block: pipeline_fresh fails when the newest stored fetched_at is
+  # max_feed_staleness_hours or more old (so 0 always blocks); today's run only.
+  # Disclose: stale_feed fires for a responding feed whose newest item is that
+  # old. Both use this one key.
+  max_feed_staleness_hours: 36
+  # Disclose when one source's share of the day's headlines is above this.
+  max_single_source_share: 0.70
+  # Disclose when the share of rows below index.low_confidence is above this.
+  max_low_confidence_rate: 0.50
+  # thin_day has no key here: it reads explain.min_headlines (8), the floor
+  # below which the day is too thin to cluster. One key, so they can't drift.
 
 store:
   # One SQLite file, gitignored (*.db and data/*). Relative to the working

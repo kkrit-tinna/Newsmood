@@ -80,6 +80,11 @@ def _write_yaml_config(path: Path) -> None:
                     "delay_seconds": 0,
                     "feeds": [{"name": "yaml-feed", "url": "https://yaml.test/rss"}],
                 },
+                "gates": {
+                    "max_feed_staleness_hours": 36,
+                    "max_single_source_share": 0.70,
+                    "max_low_confidence_rate": 0.50,
+                },
                 "store": {"db_path": "yaml.db"},
                 "training": {
                     "max_length": 7,

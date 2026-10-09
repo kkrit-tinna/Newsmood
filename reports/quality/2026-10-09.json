@@ -1,0 +1,88 @@
+{
+  "blocked": false,
+  "date": "2026-10-09",
+  "gates": [
+    {
+      "kind": "block",
+      "name": "pipeline_fresh",
+      "observed": {
+        "newest_fetched_at": "2026-10-09T14:14:30.753316+00:00"
+      },
+      "status": "pass",
+      "threshold": 36.0,
+      "threshold_key": "gates.max_feed_staleness_hours"
+    },
+    {
+      "kind": "block",
+      "name": "all_scored",
+      "observed": {
+        "unscored": 0
+      },
+      "status": "pass",
+      "threshold": 0,
+      "threshold_key": null
+    },
+    {
+      "kind": "disclose",
+      "name": "thin_day",
+      "observed": {
+        "headlines": 19
+      },
+      "status": "pass",
+      "threshold": 8,
+      "threshold_key": "explain.min_headlines"
+    },
+    {
+      "kind": "disclose",
+      "name": "feeds_down",
+      "observed": {
+        "configured": 3,
+        "failed": [],
+        "responded": 3
+      },
+      "status": "pass",
+      "threshold": null,
+      "threshold_key": null
+    },
+    {
+      "kind": "disclose",
+      "name": "single_source",
+      "observed": {
+        "count": 10,
+        "headlines": 19,
+        "share_pct": 53,
+        "source": "investing-stocks"
+      },
+      "status": "pass",
+      "threshold": 0.7,
+      "threshold_key": "gates.max_single_source_share"
+    },
+    {
+      "kind": "disclose",
+      "name": "low_confidence",
+      "observed": {
+        "headlines": 19,
+        "unsure": 3
+      },
+      "status": "pass",
+      "threshold": 0.5,
+      "threshold_key": "gates.max_low_confidence_rate"
+    },
+    {
+      "kind": "disclose",
+      "name": "stale_feed",
+      "observed": {
+        "newest_published_at": {
+          "cnbc-finance": "2026-10-09T12:01:26.000000+00:00",
+          "investing-stocks": "2026-10-09T14:01:48.000000+00:00",
+          "marketwatch-top": "2026-10-09T13:59:00.000000+00:00"
+        },
+        "stale": []
+      },
+      "status": "pass",
+      "threshold": 36.0,
+      "threshold_key": "gates.max_feed_staleness_hours"
+    }
+  ],
+  "run_at": "2026-10-09T14:15:59.515175+00:00"
+}

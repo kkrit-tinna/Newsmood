@@ -103,7 +103,7 @@ def test_mood_taken_from_aggregate_not_recomputed(settings):
     assert data.mood == -12.3
     assert data.band == "mildly negative"
     assert data.model_id == MID
-    assert data.gates == "not yet implemented"
+    assert data.gates is None  # not evaluated outside the pipeline
 
 
 def test_neutral_headlines_are_in_terms_with_term_zero():
