@@ -57,6 +57,7 @@ report day plus the trailing background window, and never persisted.
 
 ## Storage
 One SQLite file at `data/newsmood.db`, not committed. 
+Actions persists it as `newsmood.db` on the orphan `data` branch (T4.4), never merged into main.
 Two tables:
 `headlines` (one row per deduplicated headline, with its label) and `daily_index` (one row per non-empty ET day). 
 The schema in `data/store.py` is the source of truth for columns.
@@ -91,9 +92,12 @@ The schema in `data/store.py` is the source of truth for columns.
 - One commit per task, on `main`, message format `feat: rss-ingest` or
   `docs: model-card`.
 - Never commit anything under `data/` except `data/sample/`, and never
-  `models/`, `.env`, or `*.db`.
+  `models/`, `.env`, or `*.db`. Exception: `newsmood.db` on the orphan `data`
+  branch, written only by the Actions workflows (and the one-time seed in T4.4).
 - One-line commit subjects only, e.g. `feat: rss-ingest`, `docs: model-card`.
 - `reports/` **is** committed — the daily output is the visible evidence the pipeline runs.
+- Audit files such as `reports/quality/*.json` and personal notes
+  (`docs/week*_summary.md`) are never committed; they stay local.
 
 ## Scope
 No web service, no cloud infrastructure, no Docker, no streaming, no ticker

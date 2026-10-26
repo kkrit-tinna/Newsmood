@@ -4,6 +4,8 @@ data/*
 !data/sample/
 /models/
 reports/*.json
+reports/quality/
+docs/week*_summary.md
 *.db
 __pycache__/
 *.egg-info/

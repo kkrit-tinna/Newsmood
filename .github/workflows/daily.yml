@@ -1,0 +1,175 @@
+# Daily report (T4.4): weekdays 22:00 UTC, after the US close.
+# `newsmood report --offline` ingests and scores itself (T4.3). The DB lives on
+# the orphan `data` branch (IMPLEMENTATION_GUIDE.md §2, §9 2026-10-23).
+#
+# Outcomes, decided from the exit code plus the quality JSON this run wrote:
+#   success     exit 0                      -> DB to `data`, report to main
+#   blocked     nonzero, "blocked": true    -> DB to `data`, no report, job fails
+#   crashed     anything else               -> nothing pushed, job fails
+# Exit 1 alone can't tell a gate block from an uncaught exception.
+name: daily
+
+on:
+  schedule:
+    - cron: "0 22 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      staleness_hours:
+        description: "Override gates.max_feed_staleness_hours (0 forces a pipeline_fresh block). Empty keeps the config value."
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: newsmood-db
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          # Enough history for `git pull --rebase` before the report push to
+          # find the merge base. Not 0: that fetches every branch's full
+          # history, `data` included, defeating its shallow fetch.
+          fetch-depth: 50
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # CPU-only torch first, so `pip install -e .` finds torch satisfied and
+      # the runner never downloads CUDA wheels.
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e .
+
+      - name: Read model revision
+        id: model
+        run: |
+          rev=$(python -c "import yaml; print(yaml.safe_load(open('config/default.yaml'))['model']['revision'])")
+          echo "revision=$rev" >> "$GITHUB_OUTPUT"
+
+      # model.cache_dir; the loader passes its own cache_dir, so not
+      # ~/.cache/huggingface (§9, 2026-09-28).
+      - name: Cache model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/newsmood
+          key: newsmood-model-${{ steps.model.outputs.revision }}
+
+      - name: Fetch DB from data branch
+        run: |
+          git fetch --depth=1 origin +refs/heads/data:refs/remotes/origin/data
+          git show origin/data:newsmood.db > data/newsmood.db
+
+      - name: Configure bot identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Report
+        id: report
+        env:
+          STALENESS_HOURS: ${{ inputs.staleness_hours }}
+        run: |
+          # Set only when given: an empty env var would fail settings validation.
+          if [ -n "$STALENESS_HOURS" ]; then
+            export NEWSMOOD_GATES__MAX_FEED_STALENESS_HOURS="$STALENESS_HOURS"
+            echo "gates.max_feed_staleness_hours overridden to $STALENESS_HOURS" >&2
+          fi
+
+          # Only quality files written by this run count; main may carry old ones.
+          marker="$RUNNER_TEMP/report-start"
+          touch "$marker"
+          sleep 1
+
+          code=0
+          newsmood report --offline || code=$?
+          echo "exit=$code" >> "$GITHUB_OUTPUT"
+
+          written=$(find reports/quality -name '*.json' -newer "$marker" 2>/dev/null || true)
+          count=$(printf '%s\n' "$written" | grep -c . || true)
+          if [ "$count" -ne 1 ]; then
+            echo "outcome=crashed" >> "$GITHUB_OUTPUT"
+            echo "expected one new quality file, found $count" >&2
+            exit 0
+          fi
+          quality="$written"
+          # The date T3.5 wrote, in index.timezone; not recomputed here.
+          date=$(python -c "import json, sys; print(json.load(open(sys.argv[1]))['date'])" "$quality")
+          blocked=$(python -c "import json, sys; print(str(json.load(open(sys.argv[1]))['blocked']).lower())" "$quality")
+          echo "quality=$quality" >> "$GITHUB_OUTPUT"
+          echo "date=$date" >> "$GITHUB_OUTPUT"
+
+          if [ "$code" -eq 0 ] && [ -f "reports/$date.md" ]; then
+            echo "outcome=success" >> "$GITHUB_OUTPUT"
+          elif [ "$code" -ne 0 ] && [ "$blocked" = "true" ]; then
+            echo "outcome=blocked" >> "$GITHUB_OUTPUT"
+          else
+            echo "outcome=crashed" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push DB to data branch
+        if: steps.report.outputs.outcome == 'success' || steps.report.outputs.outcome == 'blocked'
+        run: |
+          bash .github/scripts/push_db.sh "data: daily ${{ steps.report.outputs.date }} (${{ steps.report.outputs.outcome }})"
+
+      - name: Commit report to main
+        if: steps.report.outputs.outcome == 'success'
+        env:
+          DATE: ${{ steps.report.outputs.date }}
+        run: |
+          git add "reports/$DATE.md"
+          if git diff --cached --quiet; then
+            echo "reports/$DATE.md unchanged, nothing to commit" >&2
+            exit 0
+          fi
+          git commit -m "report: $DATE [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Job summary
+        if: always()
+        env:
+          OUTCOME: ${{ steps.report.outputs.outcome }}
+          EXIT_CODE: ${{ steps.report.outputs.exit }}
+          DATE: ${{ steps.report.outputs.date }}
+          QUALITY: ${{ steps.report.outputs.quality }}
+        run: |
+          {
+            case "$OUTCOME" in
+              success)
+                echo "## Report $DATE"
+                echo "Committed \`reports/$DATE.md\` to main; DB pushed to \`data\`."
+                ;;
+              blocked)
+                echo "## Blocked by a quality gate ($DATE)"
+                echo "\`newsmood report\` exited $EXIT_CODE. No report committed; DB pushed to \`data\`."
+                ;;
+              *)
+                echo "## Crashed, not a gate block"
+                echo "\`newsmood report\` exited $EXIT_CODE. Nothing pushed, nothing committed. See the Report step log."
+                ;;
+            esac
+            if [ -n "$QUALITY" ] && [ -f "$QUALITY" ]; then
+              echo
+              python .github/scripts/gate_table.py "$QUALITY"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail unless the report was published
+        if: steps.report.outputs.outcome != 'success'
+        run: |
+          echo "outcome: ${{ steps.report.outputs.outcome || 'crashed' }}" >&2
+          exit 1

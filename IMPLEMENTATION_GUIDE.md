@@ -30,7 +30,7 @@
 
 Tasks are listed in §4–§7 in **dependency order**. They are *executed* in the order below, which is not the same thing — ingest (T3.1/T3.2) has no dependency on the model, so it moves early to reach a working report sooner.
 
-**No sessions on Sunday Sep 20, Sunday Oct 4, Thu Oct 8, Oct 10–11 or Oct 15–16.** Sessions are ~30 min Oct 9–14. Schedule revised Oct 8 (§9).
+**No sessions on Sunday Sep 20, Sunday Oct 4, Thu Oct 8, Oct 10–11 or Oct 15–25.** Sessions are ~30 min Oct 9–14. Oct 15–25: no sessions (career fair, then ad hoc tasks); `newsmood ingest` ran by hand every day, so the store has no gap. Schedule revised Oct 8 and Oct 23 (§9).
 
 ### Milestone: first offline report — target **Fri Oct 2**, slack to **Fri Oct 9**
 
@@ -57,29 +57,28 @@ Tasks are listed in §4–§7 in **dependency order**. They are *executed* in th
 | ~~Thu Oct 8~~ | — | *off* |
 | Fri Oct 9 | T3.5 quality gates | *moved from Thu; Yahoo → replacement feed* |
 | ~~Sat Oct 10 – Sun Oct 11~~ | — | *off: school, career-fair prep* |
-| Mon Oct 12 | T3.5 review + commit · T3.4 blind sample export | |
-| **Tue Oct 13** | **T3.4 labeling** | **100 headlines, one sitting, 30–40 min** |
-| Wed Oct 14 | T3.4 analysis → `docs/drift.md` | |
-| ~~Thu Oct 15 – Fri Oct 16~~ | — | *off: career fair* |
-| **Sat Oct 17** | **T4.4 Actions** | **~60 min** |
-| Sun Oct 18 | T4.5 `make demo` | |
-| Mon Oct 19 | T2.6 model card | |
-| Tue Oct 20 | README | |
-| Wed Oct 21 | T3.7 runbook | |
-| **Thu Oct 22** | **T4.6 release** | **← end date (was Sun Oct 18)** |
-| Fri Oct 23 | buffer | unassigned cleanup |
-| after release | T4.1 Claude client + online wiring | *optional, deferred* |
+| **Mon Oct 12** | **T3.5 review + commit · T3.4 blind sample export + labeling (moved from Tue)** | **100 headlines, one sitting** |
+| ~~Tue Oct 13~~ | — | *off: `newsmood ingest` only* |
+| Wed Oct 14 | T3.4 relabel + numbers | blind relabel of 20, `data/t34_analysis.json` |
+| ~~Thu Oct 15 – Sun Oct 25~~ | — | *no sessions: career fair, then ad hoc tasks. Manual `newsmood ingest` daily, no data gap* |
+| **Mon Oct 26** | **T4.4 Actions** | **~60 min. Seed the `data` branch, then the workflows** |
+| Tue Oct 27 | T3.4 write-up + commit | ~30 min |
+| Wed Oct 28 | T4.5 `make demo` + wheel smoke test | ~45 min |
+| Thu Oct 29 | T2.6 model card + README, T3.7 folded in | ~60 min |
+| **Fri Oct 30** | **T4.6 release** | **← end date (was Thu Oct 22)** |
+| Sat Oct 31 – Sun Nov 1 | buffer | |
+| after release | PyPI publishing · unassigned cleanup · T4.1 Claude client + online wiring | *optional, deferred* |
 | — | ~~T3.6 Reddit ingest~~ | *dropped* |
 
 ### The two sessions that cannot move
 
 **Sun Sep 27** — the fine-tune needs 20–40 minutes of unattended wall clock plus setup and evaluation. If it lands at the majority-class rate and needs a second attempt, the milestone slips to Oct 9. That is what the Oct 9 buffer is for.
 
-**Tue Oct 13** (moved from Sun Oct 11) — T3.4 hand-labels 100 headlines. Do it in one sitting so your own labeling stays consistent; splitting it across two weekdays changes the labels partway through. The analysis afterwards (Wed Oct 14) can be a separate session.
+**Mon Oct 12** (planned Sun Oct 11, then Tue Oct 13) — T3.4 hand-labeled 100 headlines, in one sitting on Mon Oct 12 so the labeling stayed consistent; splitting it across two weekdays would have changed the labels partway through. The relabel and numbers (Wed Oct 14) and the write-up (Tue Oct 27) are separate sessions.
 
 ### What "offline-first" changes
 
-`--offline` produces the whole report, including the one-sentence template lede (T4.2b, block 0) and every evidence block below it. The only thing it omits is the multi-sentence Claude narrative. That takes T4.1 (the Claude client) off the critical path entirely, which is why it is optional and now deferred until after the Oct 22 release. Everything up to and including the Oct 2 milestone runs with **no API key and no paid service**.
+`--offline` produces the whole report, including the one-sentence template lede (T4.2b, block 0) and every evidence block below it. The only thing it omits is the multi-sentence Claude narrative. That takes T4.1 (the Claude client) off the critical path entirely, which is why it is optional and now deferred until after the Oct 30 release. Everything up to and including the Oct 2 milestone runs with **no API key and no paid service**.
 
 If you never enable online mode, the project is still complete: `make demo`, the model, the index, the tables, the gates, the drift analysis and the README all stand. You lose one section of prose.
 
@@ -113,10 +112,15 @@ Ship an installable CLI package that:
 ## 2. Target architecture
 
 ```
+  `data` branch (orphan, never merged): newsmood.db only
+        │  fetched at the start of every run, committed back at the end
+        ▼
                      ┌────────────────────────────────────┐
   GitHub Actions     │  newsmood ingest                   │
-  cron 22:00 UTC ──► │  RSS feeds → normalize → dedupe    │
-  (weekdays)         │  → SQLite  data/newsmood.db        │
+  ingest.yml         │  RSS feeds → normalize → dedupe    │
+  cron every 6 h ──► │  → SQLite  data/newsmood.db        │
+  daily.yml          │  → DB pushed back to `data`        │
+  22:00 UTC wkdays ► │  (daily.yml continues below)       │
                      └──────────────┬─────────────────────┘
                                     ▼
                      ┌────────────────────────────────────┐
@@ -134,8 +138,13 @@ Ship an installable CLI package that:
                      │  → reports/YYYY-MM-DD.md           │
                      └──────────────┬─────────────────────┘
                                     ▼
-                   commit report to repo  +  job summary
+      report written: DB → `data` branch · reports/{date}.md → main
+      gate block:     DB → `data` branch · no report · job fails
+      crash:          nothing pushed · job fails
+      every run:      job summary (gate table from quality/{date}.json)
 ```
+
+Both workflows share one `concurrency` group, so only one run touches the DB at a time, and push the DB through one script, `.github/scripts/push_db.sh`. `newsmood report` runs ingest and score itself (T4.3). `reports/quality/*.json` is gitignored: on Actions it is discarded with the runner, and the job summary is the record.
 
 ### Why each piece
 
@@ -147,6 +156,7 @@ Ship an installable CLI package that:
 | DistilBERT, not FinBERT | FinBERT is already trained on financial sentiment. Using it means there is no fine-tuning to show. FinBERT appears in this project only as a **zero-shot reference ceiling** in T2.3 |
 | Claude Haiku 4.5 | Report generation is summarization of text you already classified. Haiku is $1/$5 per MTok; one daily report costs well under a cent. Do not reach for a larger model without a measured reason |
 | GitHub Actions | Free minutes on public repos, the schedule lives in the repo, and the run log is public evidence the thing actually runs |
+| DB on an orphan `data` branch | Runners start empty, `*.db` is gitignored on main, and the Actions cache evicts entries unused for 7 days. A branch holding only `newsmood.db` persists it for free and keeps binary history out of main (§9, 2026-10-23) |
 
 ### Cost target
 
@@ -602,9 +612,13 @@ PRAW against r/stocks and r/investing. Only worth doing if T3.4 came in strong. 
 
 ---
 
-### T3.7 — Pipeline runbook
-**Commit:** `docs: pipeline-runbook`
-How to run each stage manually, what each gate failure means, how to re-score after a model update, how to backfill a missed day.
+### T3.7 — Pipeline runbook *(folded into the README, Oct 23, §9)*
+No separate doc or commit. Written Thu Oct 29 as the README section **"When a run fails"** (T4.5's README):
+
+- Exit codes: 1 = a blocking gate failed (no report written, gate named on stderr); 2 = a rejected request.
+- `reports/quality/{date}.json` is written on every run, pass or fail.
+- Backfill a missed day with `newsmood report --offline --date YYYY-MM-DD` (feed gates are `not_applicable` on a past date).
+- Restore the DB from the `data` branch: `git fetch origin data && git show origin/data:newsmood.db > data/newsmood.db`.
 
 ---
 
@@ -618,7 +632,7 @@ How to run each stage manually, what each gate failure means, how to re-score af
 **Depends on:** T4.3
 **Commit:** `feat: claude-api-integration`
 
-**Optional.** Everything ships without this. Do it only once the offline report works end to end. Deferred until after the Oct 22 release (§9, 2026-10-08).
+**Optional.** Everything ships without this. Do it only once the offline report works end to end. Deferred until after the Oct 30 release (§9, 2026-10-08, 2026-10-23).
 
 This task creates `.env.example` — a committed file holding the variable *name* with an empty value, so a reader knows the variable exists. The real key lives in `.env`, which is gitignored from T1.1 onward and never committed. Until this task runs, the project has no environment variables and no `.env.example`.
 
@@ -781,16 +795,29 @@ The vectorizer is configurable, `explain.vectorizer: window | phrasebank`, defau
 **Depends on:** T4.3
 **Commit:** `feat: daily-automation`
 
-Run `newsmood report --offline` unless the online path is done. `.github/workflows/daily.yml`, `cron: "0 22 * * 1-5"` (22:00 UTC, after the US close). Also `workflow_dispatch` so you can trigger it by hand.
+Run `newsmood report --offline` unless the online path is done. Both workflows have `workflow_dispatch` so you can trigger them by hand.
 
-- `ANTHROPIC_API_KEY` from repo secrets, **only if online mode is enabled**. Never echoed.
+**DB persistence.** Runners start empty and `*.db` is gitignored on main, so the store lives on an orphan branch `data` that holds only `newsmood.db` and is never merged into main.
+
+- **Seed it once, by hand, in this session**, from the local `data/newsmood.db`: create the orphan branch, commit the DB as `newsmood.db`, push. This is the only time a person commits the DB.
+- **`.github/workflows/ingest.yml`**, `cron: "0 */6 * * *"`: check out main, fetch `newsmood.db` from `data` into `data/newsmood.db`, run `newsmood ingest`, commit the DB back to `data`.
+- **`.github/workflows/daily.yml`**, `cron: "0 22 * * 1-5"` (22:00 UTC, after the US close): the same DB fetch, then `newsmood report --offline` (it ingests and scores itself, T4.3). The step captures the exit code and reads the quality JSON this run wrote (its `date` is the ET day, never recomputed in the workflow). Exit 1 alone can't tell a gate block from an uncaught exception, so:
+  - exit 0 → push the DB to `data`, commit only `reports/{date}.md` to main (`pull --rebase` first).
+  - nonzero and `"blocked": true` → push the DB to `data` (the ingested rows are real), commit no report, fail the job.
+  - anything else (crash, no quality file) → push nothing, commit nothing, summary says "crashed, not a gate block", fail the job.
+- `workflow_dispatch` input `staleness_hours` on `daily.yml`: when non-empty it sets `NEWSMOOD_GATES__MAX_FEED_STALENESS_HOURS` for the report step. Empty keeps the config value (an empty env var would fail settings validation).
+- Both workflows share one `concurrency` group (`newsmood-db`) with `cancel-in-progress: false`, so two runs never race on the DB; a second run queues. Both push the DB with `.github/scripts/push_db.sh`, which commits in a temporary worktree of `origin/data` so the main checkout never switches branch.
+- Install CPU-only torch from PyTorch's CPU wheel index before `pip install -e .`, so the runner never downloads CUDA wheels. pip cache keyed on `pyproject.toml`.
 - Cache `~/.cache/newsmood` (`model.cache_dir`, key it on `model.revision`) — otherwise every run re-downloads 269 MB. Not `~/.cache/huggingface`: the loader passes its own `cache_dir`. §9 Deviations 2026-09-28.
-- Commit the report back with a bot identity, `[skip ci]` in the message.
-- On failure, write the gate report to the job summary so the run page shows *why*.
+- `ANTHROPIC_API_KEY` from repo secrets, **only if online mode is enabled**. Never echoed.
+- Commit as `github-actions[bot]`, `[skip ci]` in every message.
+- Write the gate table (name, kind, observed, threshold, status) to the job summary on every run with a quality file, so a failed run's page shows *why*. `reports/quality/*.json` is never committed (CLAUDE.md).
 
-⚠️ **Needs a long session — scheduled for Sunday Oct 18.** Budget 45–60 minutes. First-run YAML iteration always overruns, and each attempt costs a push and a wait you cannot shorten.
+**Fallback if the session runs long:** ship `daily.yml` alone (one run at 22:00 UTC, same DB fetch and push). `ingest.yml` comes later.
 
-**Done when:** a manual `workflow_dispatch` produces a committed report, and a run with `NEWSMOOD_GATES__MAX_FEED_STALENESS_HOURS=0` in its environment fails visibly with `pipeline_fresh` named. (Staleness compares age ≥ threshold, so 0 blocks even a run that just fetched new rows.)
+⚠️ **Needs a long session — scheduled for Mon Oct 26.** Budget 60 minutes. First-run YAML iteration always overruns, and each attempt costs a push and a wait you cannot shorten.
+
+**Done when:** a manual `workflow_dispatch` produces a committed report, and a dispatch with `staleness_hours=0` (which sets `NEWSMOOD_GATES__MAX_FEED_STALENESS_HOURS=0`) fails visibly with `pipeline_fresh` named in the log and job summary, commits no report, and still pushes the DB. (Staleness compares age ≥ threshold, so 0 blocks even a run that just fetched new rows.) After one run, the `data` branch has a new commit and the DB row count grew.
 
 ---
 
@@ -798,19 +825,24 @@ Run `newsmood report --offline` unless the online path is done. `.github/workflo
 **Depends on:** T4.4
 **Commit:** `docs: final-documentation`
 
-`make demo` must work on a clean clone **with no API key**:
+`make demo` must work on a clean clone **with no API key**. It runs the real pipeline on live RSS against a throwaway DB and output dir, set through the existing config env vars (`store.db_path`, `report.output_dir`):
 
 ```
 pip install -e . && \
-newsmood score --file data/sample/headlines_200.jsonl && \
-newsmood report --offline --input data/sample/headlines_200.jsonl
+tmp=$$(mktemp -d) && \
+NEWSMOOD_STORE__DB_PATH=$$tmp/newsmood.db \
+NEWSMOOD_REPORT__OUTPUT_DIR=$$tmp/reports \
+newsmood report --offline && \
+echo "report in $$tmp/reports"
 ```
 
-`--offline` skips the Claude call and emits the report with a placeholder narrative. Everything else is real.
+`report` ingests, scores and writes the report in one call (T4.3). It needs network (RSS feeds, and the model download on first run) but no API key, and never touches `data/newsmood.db` or `reports/`. This replaces the undesigned `report --input` (§9, 2026-10-23). A live demo on an empty DB is a thin day: expect a "Data notes" line and a declined cluster block.
+
+**Wheel smoke test.** Build the wheel, install it in a fresh venv, `cd /tmp`, run `newsmood --help`. If `config/default.yaml` is resolved relative to the working directory, it won't ship: package it and load it with `importlib.resources`.
 
 **This is the single highest-leverage thing in the repo.** Most portfolio projects cannot be run by the person evaluating them. Yours can, in under two minutes, with no signup.
 
-README order: one sentence → sample report screenshot → `make demo` → results table with the baseline floor → the drift number from T3.4 → install → how it works → **using the data** → engineering notes. Installation goes near the end; nobody installs before deciding they care.
+The README is written Thu Oct 29 with T2.6 (§0.5). README order: one sentence → sample report screenshot → `make demo` → results table with the baseline floor → the drift number from T3.4 → install → how it works → **using the data** → **when a run fails** (T3.7, folded in) → engineering notes. Installation goes near the end; nobody installs before deciding they care.
 
 **Using the data** — a short section, three or four lines, no new command:
 
@@ -826,6 +858,8 @@ README order: one sentence → sample report screenshot → `make demo` → resu
 This serves anyone who wants the series for their own work without adding an export command to build, document and maintain. If you later find yourself wanting a CSV after real use, add it then — you will know the shape you want.
 
 Link the archived `social_media_sentiment_analysis` repo as the predecessor, with one line on what changed and why.
+
+**Done when:** `make demo` on a clean clone with no `ANTHROPIC_API_KEY` set writes a complete report to the temp dir and leaves `data/newsmood.db` and `reports/` unchanged (`git status` clean, DB mtime unchanged), and the wheel smoke test prints `newsmood --help` from `/tmp` in a fresh venv.
 
 ---
 
@@ -937,3 +971,16 @@ Append whenever reality differs. Date, task ID, what changed, why.
 | 2026-10-09 | T3.5 | New store queries `last_fetched_at` and `unscored_between` | Inputs for `pipeline_fresh` and `all_scored`. `store.py` stays the only module that imports `sqlite3` |
 | 2026-10-09 | T3.5 | T4.4 Done-when: the forced failure is `NEWSMOOD_GATES__MAX_FEED_STALENESS_HOURS=0`, not `min_headlines: 9999`. §8's "Gates with teeth" line now reads "refuses to publish when it is broken, and discloses when the data is thin" | Thin days only disclose now, so `min_headlines: 9999` can't fail a run |
 | 2026-10-09 | T3.5 | Feeds: `yahoo-finance` removed from config (its stored rows stay); `investing-stocks` (`investing.com/rss/news_25.rss`) added last. **The index's source mix changes from Oct 9**: days before are cnbc-finance + marketwatch-top (+ Yahoo through Sep 23); from Oct 9 on, cnbc-finance + marketwatch-top + investing-stocks | Yahoo was stale from Sep 23 and returned HTTP 404 on Oct 7 and Oct 8. Investing.com: fresh, 10 items per fetch, Reuters and Investing.com staff. Its offset-less pubDate is UTC (docs/sources.md) and feedparser reads it as UTC, so no conversion was added; `test_offset_less_pubdate_is_read_as_utc` pins it. No templated close-of-trade headlines in the probe fetches, so no `ingest.title_exclude_patterns` |
+| 2026-10-14 | Schedule | T3.4 labeling moved from Tue Oct 13 to Mon Oct 12, after the blind export in the same session; relabel + numbers stayed on Wed Oct 14; the write-up moved to Sat Oct 17, ahead of T4.4. Tue Oct 13 became ingest only | Labeling all 100 on Oct 12 freed Oct 13, and the one-sitting rule held. Oct 15–16 are the career fair, so the write-up takes the first session after it |
+| 2026-10-14 | T3.4 | Protocol beyond the guide's "label 100, compare": a labeling rule fixed before sampling (investor viewpoint; advice, explainers and previews neutral unless directional); a seeded blind export (seed 42; pool = scored rows published on or after the store's first `fetched_at`, which excludes Yahoo's stale items; 168 rows, 100 sampled); a `hard` flag; a blind relabel of 20 (seed 43) for self-agreement (raw % and Cohen's κ); Wilson 95% intervals on every accuracy. Scripts: `scripts/t34_export.py`, `scripts/t34_label.py`, `scripts/t34_analyze.py`. Full protocol in `docs/drift.md` §Protocol | 100 labels give about ±10 points; without intervals and a measured self-agreement, a gap to 92.08% can't be separated from labeling noise. Fixing the rule and the sample before labeling, and freezing the labels (sha256) before opening the model's output, keeps the comparison blind |
+| 2026-10-23 | Schedule | Release moves from Thu Oct 22 to Fri Oct 30, buffer Oct 31 – Nov 1. No sessions Oct 15–25 (career fair, then ad hoc tasks). New order: T4.4 Mon Oct 26, T3.4 write-up Tue Oct 27, T4.5 Wed Oct 28, T2.6 + README (T3.7 folded in) Thu Oct 29, T4.6 Fri Oct 30. PyPI publishing, unassigned cleanup and T4.1 after release | Ten days lost to ad hoc work. `newsmood ingest` ran by hand every day through Oct 25, so the store has no gap |
+| 2026-10-23 | T4.4 | The store persists between Actions runs on an orphan `data` branch holding only `newsmood.db`, never merged into main. `ingest.yml` (every 6 h) and `daily.yml` (weekdays 22:00 UTC) fetch it first and commit it back; one shared `concurrency` group (`cancel-in-progress: false`). Seeded once by hand from the local DB. Exception to "never commit `*.db`", limited to the `data` branch. Done-when adds: the `data` branch has a new commit and the row count grew | Runners start empty each run, `*.db` is gitignored on main, and the Actions cache evicts entries unused for 7 days, so neither the checkout nor the cache keeps the store |
+| 2026-10-23 | T4.5 | `make demo` runs `newsmood report --offline` on live RSS against a temp DB and output dir via `NEWSMOOD_STORE__DB_PATH` and `NEWSMOOD_REPORT__OUTPUT_DIR`, replacing `report --input`. Wheel smoke test (fresh venv, `cd /tmp`, `newsmood --help`) added. Done-when added | `report --input` was never designed: sample rows have no url, source or `published_at`, and the report needs background rows. The env-var paths already exist and keep the demo off the real store and `reports/` |
+| 2026-10-23 | T3.7 | Folded into a README section "When a run fails": exit codes 1/2, `reports/quality/{date}.json`, backfill with `--date`, restoring the DB from the `data` branch. No separate doc or commit | Schedule cut; the runbook's content is short and belongs where a user looks first |
+| 2026-10-23 | T3.4 | Optional FinBERT reference add-on dropped (scoring FinBERT against the 100 hand labels). It was planned in HANDOFF only, never in the T3.4 block | Schedule cut; it was the first item marked to cut |
+| 2026-10-26 | T4.4 | `reports/quality/*.json` is gitignored and never committed (CLAUDE.md rule). T3.5 still writes it on every run; on Actions it is discarded with the runner, and the job summary and run log are the record. `reports/quality/2026-10-09.json`, tracked since T3.5, is untracked in this commit; the local copy is kept | Decided at T4.4 (HANDOFF carry-forward left it open). The existing `reports/*.json` line doesn't match files in subfolders, so `reports/quality/` is added to `.gitignore` |
+| 2026-10-26 | T4.4 | `daily_index` rows for Oct 3–5 deleted by hand before seeding the `data` branch; the series starts Oct 1, every other pre-launch row kept. The headlines remain, so recomputing those dates via `report --date` would reproduce the thin values | They were thin rows computed on days no ingest had run, frozen once written |
+| 2026-10-26 | T4.4 | `workflow_dispatch` input `staleness_hours` on `daily.yml`; non-empty sets `NEWSMOOD_GATES__MAX_FEED_STALENESS_HOURS` for the report step only | The Done-when's forced failure needs the env var on one run without editing the workflow. Set only when non-empty: an empty env var fails settings validation |
+| 2026-10-26 | T4.4 | `daily.yml` pushes the DB on success and on a gate block (quality JSON `"blocked": true`), never on a crash (nonzero exit without a blocked quality file from this run). Only `reports/{date}.md` is committed to main, on success | A blocked run's ingested rows are real data and the block is a refusal, not corruption. A crash may have left the DB in an unknown state. Exit 1 alone can't separate the two, so the JSON decides |
+| 2026-10-26 | T4.4 | CI installs CPU-only torch from `download.pytorch.org/whl/cpu` before `pip install -e .` | torch is a core dependency; from PyPI the Linux wheel pulls several GB of CUDA libraries the CPU runner can't use |
+| 2026-10-26 | T4.4 | `docs/week*_summary.md` gitignored | Personal notes, not project docs. The rest of `docs/` stays tracked |
