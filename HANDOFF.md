@@ -10,7 +10,7 @@
 
 Successor to `social_media_sentiment_analysis`, which is archived. That project stalled on a synthetic Kaggle dataset with 191 unusable sentiment labels; the models topped out at 56%. This one uses a real corpus with three clean classes and ships as an installable tool rather than a notebook.
 
-**Timeline:** Sep 16 – Oct 22, 2026 (extended from Oct 18 on Oct 8 for school and the Oct 15 career fair). **Offline-first** — first working report reached Fri Oct 2.
+**Timeline:** Sep 16 – Oct 30, 2026 (extended from Oct 18 on Oct 8 for school and the Oct 15 career fair, then from Oct 22 on Oct 23 after Oct 15–25 went to ad hoc work). **Offline-first** — first working report reached Fri Oct 2.
 
 ---
 
@@ -70,32 +70,33 @@ GitHub Actions (weekdays 22:00 UTC)
 
 ## Where I am right now
 
-*Last updated: Thursday, Oct 8, 2026*
+*Last updated: Tuesday, Oct 27, 2026*
 
-**Status:** T1.1–T1.6, T2.1–T2.5, T3.1–T3.3, T4.2, T4.3 and T4.2b complete. 322 tests.
-Reports now carry a computed lede, contribution % on recommended articles, and a
-cluster block that declines honestly at current volume.
+**Status:** T4.4 and T3.4 done. `ingest.yml` (every 6 h) and `daily.yml`
+(weekdays 22:00 UTC) run `--offline` on GitHub Actions; the store lives on
+the orphan `data` branch (seeded Oct 26, 646 headlines), and both workflows
+fetch it first and push it back. Manual dispatch checks passed, and the
+overnight scheduled `ingest` runs went green. **Manual `newsmood ingest` has
+stopped**: the local DB is no longer the store of record. T3.4 is committed:
+`docs/drift.md` reports 59/100 live vs 92.08% in-domain, with six error
+examples (one per off-diagonal cell). T1.1–T1.6, T2.1–T2.5, T3.1–T3.5, T4.2,
+T4.3, T4.2b and T4.4 complete. 363 tests.
 
-**Next task:** T3.5 quality gates, Fri Oct 9 (30 min). Gate decisions drafted: block broken runs, disclose thin days.
-
-**Schedule (remaining)**: revised Oct 8. Sessions are ~30 min through Oct 14.
-No sessions Oct 8, Oct 10–11 (school, fair prep) or Oct 15–16 (career fair).
+**Next:** T4.5, Wed Oct 28 (~45 min): `make demo` against a temp DB and
+output folder via `NEWSMOOD_STORE__DB_PATH` / `NEWSMOOD_REPORT__OUTPUT_DIR`,
+plus the wheel smoke test. `git pull` first; the bot commits a report to
+main each weekday.
 
 | Date | Task |
 |---|---|
-| Fri Oct 9 | T3.5 quality gates: Claude Code builds; Yahoo → replacement feed |
-| Mon Oct 12 | T3.5 review + commit · export the blind T3.4 sample |
-| **Tue Oct 13** | **T3.4 labeling: 100 headlines, one sitting (30–40 min)** |
-| Wed Oct 14 | T3.4 analysis → `docs/drift.md` |
-| **Sat Oct 17** | **T4.4 Actions (~60 min)** |
-| Sun Oct 18 | T4.5 `make demo` |
-| Mon Oct 19 | T2.6 model card |
-| Tue Oct 20 | README |
-| Wed Oct 21 | T3.7 runbook |
-| **Thu Oct 22** | **T4.6 release ← new end date** |
-| Fri Oct 23 | buffer + unassigned cleanup |
+| ~~Mon Oct 26~~ | ~~T4.4 Actions~~ ✓ |
+| ~~Tue Oct 27~~ | ~~T3.4 write-up + commit~~ ✓ |
+| **Wed Oct 28** | **T4.5 `make demo` + wheel smoke test (~45 min)** |
+| Thu Oct 29 | T2.6 model card + README, T3.7 folded in (~60 min) |
+| **Fri Oct 30** | **T4.6 release ← end date (was Thu Oct 22)** |
+| Oct 31 – Nov 1 | buffer |
+| after release | PyPI publishing, unassigned cleanup, T4.1 |
 
-Goal before the Oct 15 fair: gates working and the live-headline accuracy measured.
 T3.6 (Reddit) is dropped. T4.1 + online wiring are deferred until after release.
 
 **Numbers later tasks depend on**
@@ -106,13 +107,15 @@ T3.6 (Reddit) is dropped. T4.1 + online wiring are deferred until after release.
 | Baselines (test: acc / macro-F1 / neg recall) | Majority 62.16 / 25.56 / 0.00 · Stratified 44.02 / 30.54 / 11.11 · VADER 54.05 / 45.83 / 22.22 · LogReg 83.59 / 79.97 / 77.78 |
 | DistilBERT, **test** | 92.08% acc · 90.19% macro-F1 · recall neg/neu/pos 96.83 / 93.17 / 87.22 · 41 errors vs LogReg's 85. **The published model's number.** Val (93.44 / 90.79, epoch 3) is not comparable |
 | FinBERT | 95.37 / 94.45: trained on PhraseBank, reference only, **not a ceiling** |
+| T3.4 live headlines (`data/t34_analysis.json`) | Acc vs my labels: all 59/100 = **59.00%** [49.20, 68.13] · unflagged 49/80 = 61.25% [50.29, 71.18] · hard 10/20 = 50.00% [29.93, 70.07] (Wilson 95%), vs **92.08%** PhraseBank test (n=518) · recall neg 16/28 = 57.14 · neu 36/45 = 80.00 · pos 7/27 = 25.93 · my mix 28 neg / 45 neu / 27 pos, 20 hard · self-agreement 14/20 = 70.00%, κ 0.549 · largest cell positive→neutral, 15 (9 at confidence ≥ 0.85) · by source: marketwatch 32/47 = 68.09 · cnbc 12/22 = 54.55 · investing 15/31 = 48.39 |
 | Published model | `kkrit-tinna/newsmood-distilbert-financial` @ `be7b809e0d8f7bd50e77d902aee199363b7e2a66`, 269 MB |
 | Throughput | 164.9 headlines/s on M3 Pro CPU, batch 32 · cold start 3.05 s (`docs/model_card.md`) |
-| Feeds | cnbc-finance and marketwatch-top live. yahoo-finance stale since Sep 23, **HTTP 404 on Oct 7** |
+| Feeds | cnbc-finance, marketwatch-top, **investing-stocks** (added Oct 9; 10 items ≈ 20 min of news; naive dates, verified UTC). yahoo-finance removed Oct 9 (stale since Sep 23, 404 Oct 7–8); its stored rows stay. **Source mix changes from Oct 9** |
+| Store (Oct 14) | 336 rows: marketwatch 113 · investing 96 · cnbc 78 · yahoo 49 (some from 2024). T3.4 pool (Oct 12): 168 scored rows published on or after the first fetch |
 | Live volume | ~15 headlines/day at one ingest a day (12–29 on ingest days, 1–4 otherwise) |
 | Live label mix | Sep 29, n=112: 14.3% neg · 61.6% neu · 24.1% pos |
 | T1.4 vectorizer OOV on live headlines | 36.9% token / 53.5% type over 147 headlines, so the default is the `window` vectorizer |
-| Latest report | Oct 7: mood −9.4, n=13, up 17.0 from Oct 2. Re-run byte-identical. Cluster block declined, as on all six stored days with ≥ 8 headlines |
+| Latest report | Oct 9 (morning, partial day, not committed): mood −29.0, n=19, 3 sources, gates 2/2, no data notes. Oct 7: −9.4, n=13. Cluster block has declined on every stored day |
 
 **Ready:** repo, env, HF token, PyPI name (`newsmood` / `newsmood-cli`).
 **Open:** Anthropic API key. Only needed for T4.1, which is deferred until after release.
@@ -122,23 +125,38 @@ Run `newsmood ingest` 2–3 times on weekdays (morning, midday, evening), at lea
 
 **Carry forward**, grouped by the session that acts on it
 
-*T3.5 — gates (Fri Oct 9; review Mon Oct 12)*
-- Hard blocks for broken runs (feeds down, dedupe failing, all items stale)
-  versus disclosure for thin days. `min_headlines: 15` contradicts T3.3's
-  no-minimum rule. T4.4's Done-when and §8's "Gates with teeth" depend on the
-  outcome. `ReportData.gates` replaces "not yet implemented".
-- Yahoo: stale since Sep 23, 404 on Oct 7 and Oct 8. Drop it.
-- Replacement candidate: Investing.com stock market news
-  (`investing.com/rss/news_25.rss`), fresh, Reuters + Investing.com staff, 10
-  items. Check before adding: its dates have no timezone (`2026-10-08 15:42:29`),
-  which matters for ET day bucketing; template headlines like "Poland stocks
-  lower at close of trade" (filter or disclose); terms allow headline use.
-  Rejected on Oct 8: Nasdaq Markets (~33 h stale, syndicated), Seeking Alpha
-  and Fox Business (robots.txt blocks automated fetching). §9 row with the date
-  the new feed joins.
-- MarketWatch is 85% neutral (n=20), mostly advice columns.
+*T4.4 — Actions (Mon Oct 26)*
+- DB branch plan: orphan `data` branch holds only `newsmood.db`, never merged.
+  Seed it by hand from the local DB first. `ingest.yml` every 6 h and
+  `daily.yml` weekdays 22:00 UTC both fetch the DB from `data` and commit it
+  back; one `concurrency` group, `cancel-in-progress: false`. Fallback: only
+  `daily.yml` today, `ingest.yml` later.
+- Ingest every 6 h, score and report once; update §2's diagram and the cron.
+  Then re-check `explain.cluster_distance` (0.6) against the higher volume.
+- Cache `~/.cache/newsmood`, keyed on `model.revision`.
+- `daily_index` has real rows from Oct 1, plus thin frozen rows for Oct 3–5. Clear
+  it before launch only if the trend should start at launch.
+- Done-when's forced failure: `NEWSMOOD_GATES__MAX_FEED_STALENESS_HOURS=0` →
+  exit 1, `pipeline_fresh` named on stderr. Decide whether the workflow commits
+  `reports/quality/*.json` (audit trail) or only the reports.
+- Each ingest adds ~10 Investing.com items (≈ 20 min of its news), so its daily
+  share depends on cadence. Check source shares after the first week.
 
-*T4.5 — make demo (Sun Oct 18)*
+*T3.4 — write-up (Tue Oct 27)*
+- I pick the five errors and write the reasoning myself; Claude may draft the rest.
+- Headline finding: positive recall is low, mostly positive→neutral at high
+  confidence (deals, launches, "Why is X stock rallying today?"), cases rule 2
+  settled in advance.
+- Report self-agreement as a reliability limit. 4 of the 6 changed labels weren't
+  flagged hard; the relabel flagged 7 vs 4 originally.
+- One story is sampled twice (the two Amazon/Decart ids, `94a3bd4385dc` and
+  `4973b35ad5f6`); say it, don't drop it.
+- The drop exceeds the guide's 10–20 point expectation: a finding, not a §9 deviation.
+- Commit set: `docs/drift.md`, `data/sample/hand_labeled_100.jsonl`,
+  `scripts/t34_*.py`. `data/t34_*.jsonl` and `data/t34_analysis.json` stay
+  gitignored.
+
+*T4.5 — make demo (Wed Oct 28)*
 - `report --input` is undesigned: sample rows have no url, source or
   `published_at`; `score --file` writes `pred_label`; the input path also needs
   `ThemeInputs` (background rows, `history_days`).
@@ -146,26 +164,7 @@ Run `newsmood ingest` 2–3 times on weekdays (morning, midday, evening), at lea
   "unknown" counts as one source in the header.
 - The `daily_index` column list in "Using the data" is stale.
 
-*T3.4 — drift (label Tue Oct 13, analyze Wed Oct 14)*
-- The hand labels settle whether the live label mix reflects correct labels or the
-  model's prior.
-- Labelled example: "Tesla sold a lot more EVs than Wall Street expected, and
-  the stock is surging", labelled negative at 39% (Oct 2).
-- Protocol: write the labeling rule first (investor viewpoint, as PhraseBank);
-  fix the sampling rule before looking (random, seeded, no Yahoo 2024 items);
-  label blind (titles only) in one sitting; flag "hard" cases; freeze labels
-  before joining model output. Report accuracy on all 100 and on unflagged.
-  Blind relabel of 20 for self-agreement. Optional: a second person labels 30.
-- 100 labels → about ±8 points on accuracy; per-class recall (≈14 negatives)
-  is indicative only.
-
-*README (Tue Oct 20)*
-- `PYTORCH_ENABLE_MPS_FALLBACK=1`. Reports render fully only on GitHub
-  (Mermaid pie, `<details>`).
-- The cluster block declines at ~15 headlines/day; say why. Cluster names rank
-  by raw count until 30 days after the first fetch (Oct 25).
-
-*T2.6 — model card (Mon Oct 19)*
+*T2.6 — model card (Thu Oct 29)*
 - Epoch 3 shipped (val loss 0.1941; EarlyStopping never fired). Epoch 2's
   94.02% val accuracy is not the published number.
 - FinBERT isn't zero-shot: fix §2, the T2.3 body, and decision 6 above.
@@ -176,15 +175,21 @@ Run `newsmood ingest` 2–3 times on weekdays (morning, midday, evening), at lea
 - State that dedupe drops the syndication count. Replace T2.5's "2020 laptop"
   example. The Hub README comes from `docs/model_card.md`; don't bump
   `model.revision` for a README-only commit.
+- Near-duplicate titles of one story pass the `title_norm` dedupe (T3.4 sampled
+  Amazon/Decart twice).
 
-*T4.4 — Actions (Sat Oct 17)*
-- Ingest every 4–6 h, score and report once; update §2's diagram and the cron.
-  Then re-check `explain.cluster_distance` (0.6) against the higher volume.
-- Cache `~/.cache/newsmood`, keyed on `model.revision`.
-- `daily_index` has real rows from Oct 1, plus thin frozen rows for Oct 3–5. Clear
-  it before launch only if the trend should start at launch.
+*README (Thu Oct 29)*
+- `PYTORCH_ENABLE_MPS_FALLBACK=1`. Reports render fully only on GitHub
+  (Mermaid pie, `<details>`).
+- The cluster block declines at ~15 headlines/day; say why. Cluster names rank
+  by raw count until 30 days after the first fetch (Oct 25).
+- "When a run fails" (T3.7 folded in): a block exits 1, writes no report, names
+  the gate on stderr, and leaves `reports/quality/{date}.json`. Exit 2 is a
+  rejected request. A blocked run doesn't compute the index. Feed gates are
+  `not_applicable` on a past `--date`. Backfill with `--date`; restore the DB
+  from the `data` branch.
 
-*T4.6 — release (Thu Oct 22)*
+*T4.6 — release (Fri Oct 30)*
 - Build the wheel, install it in a fresh venv, `cd /tmp`, run `newsmood --help`
   and `newsmood report --offline`. If `config/default.yaml` is resolved
   relative to the working directory, it won't ship: package it and load it
@@ -198,6 +203,8 @@ Run `newsmood ingest` 2–3 times on weekdays (morning, midday, evening), at lea
   line-155 CLAIM splits the negative errors 23/15.
 - Optional: one-line RSS summary per article (needs `&amp;` unescaping).
 - Minor: `compute_mood` divides by zero (unreachable); `scored_at` uses the real clock.
+- `scripts/t34_label.py`'s default path points at the deleted
+  `data/sample/t34_blind.jsonl`; harmless, since `--file` is always passed.
 
 **Deviations**: full rows in `IMPLEMENTATION_GUIDE.md` §9
 - Setup: `.gitignore` patterns; PhraseBank from a SHA-pinned zip; config
@@ -212,6 +219,12 @@ Run `newsmood ingest` 2–3 times on weekdays (morning, midday, evening), at lea
   late-headline exclusion
 - T4.2b: blocks 2 and 4 and the counterweight dropped; `window` vectorizer;
   previous-session rule; driver by share of tilt; clusters at 0.6
+- T3.5: gates split into 2 blocks + 5 disclosures; `max_duplicate_rate`
+  dropped; staleness compares ≥; Yahoo → Investing.com; T4.4 Done-when rewritten
+- Schedule: release moved to Oct 22; T3.6 dropped; T4.1 deferred past release
+- Oct 23: release → Oct 30, no sessions Oct 15–25 (no data gap); DB on orphan
+  `data` branch (T4.4); `make demo` via env-var paths (T4.5); T3.7 → README;
+  T3.4 FinBERT add-on dropped
 
 ---
 
@@ -245,6 +258,11 @@ Run `newsmood ingest` 2–3 times on weekdays (morning, midday, evening), at lea
   `min_headlines`). Contribution and share use Σ|conf·s|. `window` TF-IDF fit on
   D plus 30 days, cosine distance, complete linkage at 0.6. Phrase variants by
   SHA-256 of the date.
+- **T3.5**: `evaluation/gates.py`, pure. Blocks (`pipeline_fresh`, `all_scored`)
+  run after scoring and before `compute_days`; a block exits 1 and writes no
+  report. Disclosures (`thin_day`, `feeds_down`, `single_source`,
+  `low_confidence`, `stale_feed`) fill one "Data notes" line. Staleness is
+  age ≥ threshold. `reports/quality/{date}.json` every run, pass or fail.
 ---
 
 ## How I want you to work with me
