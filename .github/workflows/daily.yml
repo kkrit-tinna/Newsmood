@@ -57,7 +57,7 @@ jobs:
       - name: Read model revision
         id: model
         run: |
-          rev=$(python -c "import yaml; print(yaml.safe_load(open('config/default.yaml'))['model']['revision'])")
+          rev=$(python -c "import yaml; print(yaml.safe_load(open('src/newsmood/default.yaml'))['model']['revision'])")
           echo "revision=$rev" >> "$GITHUB_OUTPUT"
 
       # model.cache_dir; the loader passes its own cache_dir, so not

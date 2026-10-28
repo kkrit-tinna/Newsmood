@@ -19,7 +19,7 @@ All rows below are measured on the pinned test split (n=518).
 ## VADER
 
 `vaderSentiment`'s compound score, thresholded at ±0.05 (`vader.positive_threshold`
-/ `vader.negative_threshold` in `config/default.yaml`), run on the pinned
+/ `vader.negative_threshold` in `src/newsmood/default.yaml`), run on the pinned
 `sentences_75agree` test split (n=518). Raw sentences, unmodified — VADER
 gets the same untouched text as the transformer will, not the TF-IDF cleaning
 path (CLAUDE.md).

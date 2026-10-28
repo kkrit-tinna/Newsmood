@@ -1,4 +1,4 @@
-"""Precedence: explicit kwargs > env > config/default.yaml > code default.
+"""Precedence: explicit kwargs > env > default.yaml > code default.
 
 Settings.settings_customise_sources ranks sources by position (earlier
 wins) — this asserts that ordering directly, rather than relying on some
@@ -128,7 +128,7 @@ def _write_yaml_config(path: Path) -> None:
 def _point_settings_at_yaml(tmp_path: Path, monkeypatch) -> None:
     """Redirect Settings' yaml source at a throwaway file with known
     sentinel values, so these tests don't depend on the real
-    config/default.yaml and aren't broken by future edits to it."""
+    default.yaml and aren't broken by future edits to it."""
     yaml_path = tmp_path / "config.yaml"
     _write_yaml_config(yaml_path)
     monkeypatch.setattr(config_module, "DEFAULT_CONFIG_PATH", yaml_path)

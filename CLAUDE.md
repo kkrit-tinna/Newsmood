@@ -75,7 +75,7 @@ The schema in `data/store.py` is the source of truth for columns.
 - Python 3.11+, venv at `newsmood_env/`. Activate before running anything.
 - Dependencies in `pyproject.toml`; no `requirements.txt`. Anything `newsmood score` needs is a core dependency. `[train]` holds
   training-only deps.
-- Thresholds, feed URLs, model revision and band cutoffs live in `config/default.yaml`. Never hardcode one in a module.
+- Thresholds, feed URLs, model revision and band cutoffs live in `src/newsmood/default.yaml` (shipped as package data). Never hardcode one in a module.
 - The model loads from the HF Hub at a **pinned revision**, cached under `~/.cache/newsmood/`. Never load from `main`.
 - CLI results go to stdout; notices, progress and warnings go to stderr. Output must stay safe to pipe or redirect.
 

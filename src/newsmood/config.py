@@ -1,4 +1,6 @@
 import re
+from importlib.resources import files
+from importlib.resources.abc import Traversable
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -6,7 +8,9 @@ import yaml
 from pydantic import AfterValidator, BaseModel, StringConstraints
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
-DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "default.yaml"
+# Shipped inside the package (pyproject package-data), so an installed wheel
+# finds it from any working directory.
+DEFAULT_CONFIG_PATH = files("newsmood") / "default.yaml"
 
 
 class DatasetSettings(BaseModel):
@@ -153,9 +157,9 @@ class ReportSettings(BaseModel):
 
 
 class YamlConfigSource(PydanticBaseSettingsSource):
-    """Reads config/default.yaml as a settings layer, below env vars."""
+    """Reads src/newsmood/default.yaml as a settings layer, below env vars."""
 
-    def __init__(self, settings_cls: type[BaseSettings], yaml_file: Path):
+    def __init__(self, settings_cls: type[BaseSettings], yaml_file: Path | Traversable):
         super().__init__(settings_cls)
         self.yaml_file = yaml_file
 
@@ -163,12 +167,12 @@ class YamlConfigSource(PydanticBaseSettingsSource):
         return None, field_name, False
 
     def __call__(self) -> dict[str, Any]:
-        with open(self.yaml_file) as f:
-            return yaml.safe_load(f) or {}
+        # read_text works for both a Path (tests) and an importlib Traversable.
+        return yaml.safe_load(self.yaml_file.read_text()) or {}
 
 
 class Settings(BaseSettings):
-    """Precedence explicit kwargs > env > config/default.yaml > code default, per CLAUDE.md.
+    """Precedence explicit kwargs > env > default.yaml > code default, per CLAUDE.md.
 
     Explicit kwargs (`Settings(dataset=...)`) outrank everything so tests can
     override a yaml- or env-covered field deterministically, regardless of

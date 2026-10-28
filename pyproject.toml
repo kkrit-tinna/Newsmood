@@ -38,3 +38,6 @@ newsmood = "newsmood.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+newsmood = ["default.yaml"]

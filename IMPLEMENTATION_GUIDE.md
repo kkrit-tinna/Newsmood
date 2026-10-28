@@ -183,9 +183,8 @@ newsmood/
 ├── Makefile
 ├── pyproject.toml              # entry point: newsmood = "newsmood.cli:app"
 ├── .github/workflows/daily.yml
-├── config/
-│   └── default.yaml            # thresholds, feeds, model id, gates
 ├── src/newsmood/
+│   ├── default.yaml            # thresholds, feeds, model id, gates (package data)
 │   ├── cli.py                  # typer app: ingest | score | report | train | eval
 │   ├── config.py               # settings object, env > yaml > default
 │   ├── preprocessing.py        # baseline-only cleaning. See the warning below
@@ -231,7 +230,7 @@ newsmood/
 ### Conventions
 
 - Python 3.11. Dependencies in `pyproject.toml`. torch, transformers, datasets and tqdm are core: running the classifier needs the same stack as training it, so a separate `[train]` extra saved nothing. `[train]` is kept, empty, for training-only additions. §9 Deviations 2026-09-28.
-- Config precedence: env var → `config/default.yaml` → code default. Never hardcode a threshold in a module.
+- Config precedence: env var → `src/newsmood/default.yaml` → code default. Never hardcode a threshold in a module.
 - Commit messages: `feat: distilbert-finetuning-complete`, `docs: model-card`. One commit per task, on `main`.
 - Every module gets a test. **The quality gates, the metrics, and the mood-index arithmetic must be tested**, because those are the parts that fail silently and still produce a plausible-looking report.
 - **No test calls the Anthropic API.** `reporting/claude.py` takes an injectable client; tests pass a fake that returns a canned response. A test suite that costs money is a test suite people stop running.
@@ -400,7 +399,7 @@ Write the analysis paragraph in `docs/baselines.md`: why VADER fails on financia
 **Commit:** `feat: distilbert-framework-setup`
 
 `training/dataset.py` — port `SentimentDataset` with `max_length` **96**,
-set in `config/default.yaml` under `training.max_length`. Measured over all
+set in `src/newsmood/default.yaml` under `training.max_length`. Measured over all
 3,453 rows: mean 30.4, p95 58, **p99 69**, max 150. 96 truncates 3 rows (1
 train, 2 val, 0 test); 58 would truncate 159. The dataset truncates but does
 not pad — `DataCollatorWithPadding` pads each batch to its own longest row.
@@ -460,7 +459,7 @@ Include the confusion matrix in `docs/baselines.md` and write a sentence about w
 
 `hf upload` the `save_pretrained` directory to `<your-username>/newsmood-distilbert-financial`. Public. (`hf` replaced `huggingface-cli` in huggingface_hub 1.x; published as `kkrit-tinna/newsmood-distilbert-financial` at `be7b809e0d8f7bd50e77d902aee199363b7e2a66`, §9 Deviations 2026-09-28.)
 
-`models/loader.py` downloads on first use, caches under `~/.cache/newsmood/`, and **pins a revision SHA** in `config/default.yaml`. An unpinned `main` means the model can change under a user without their version changing, which makes every reported number unreproducible.
+`models/loader.py` downloads on first use, caches under `~/.cache/newsmood/`, and **pins a revision SHA** in `src/newsmood/default.yaml`. An unpinned `main` means the model can change under a user without their version changing, which makes every reported number unreproducible.
 
 Print a one-line notice on first download: size, destination, and that it happens once.
 
@@ -498,7 +497,7 @@ Write `docs/model_card.md`: intended use, training data and its provenance, the 
 **Depends on:** T1.1
 **Commit:** `feat: rss-ingest`
 
-`data/feeds.py` using `feedparser`. Feed list lives in `config/default.yaml`, not in code. Candidates to test:
+`data/feeds.py` using `feedparser`. Feed list lives in `src/newsmood/default.yaml`, not in code. Candidates to test:
 
 ```yaml
 feeds:
@@ -743,7 +742,7 @@ Three slots, each independently omitted when its data does not support it:
 | Change | delta vs. the previous session: the most recent day in D−1 … D−5 (inclusive, `lede.prev_session_lookback_days`) with a stored `daily_index` row and `n_headlines ≥ lede.prev_session_min_headlines`. Weekend days qualify if they meet the floor. Computed from displayed 1-decimal moods. A candidate day with no stored row is computed with the index code (older days written once, empty days not stored) | \|delta\| < `lede.change_min_delta`, or no day in the lookback qualifies |
 | Driver | the cluster (block 3) with the largest share of tilt in the mood's direction that meets `min_cluster_size` and `cluster_purity` (≥ 70% one sentiment, matching the mood's sign), named by its distinctive terms. Never the largest cluster by size: on Oct 2 the largest cluster was 4 neutral retirement columns, which contribute 0 to the index | the day is below `explain.min_headlines`: clustering didn't run, so the clause is omitted entirely. Clustering ran but no cluster qualifies, or the band is "roughly flat": "with no dominant theme" |
 
-Bands in `config/default.yaml`, so the wording is tunable without touching code:
+Bands in `src/newsmood/default.yaml`, so the wording is tunable without touching code:
 
 ```yaml
 lede_bands:
@@ -823,7 +822,7 @@ Run `newsmood report --offline` unless the online path is done. Both workflows h
 
 ### T4.5 — `make demo` and README
 **Depends on:** T4.4
-**Commit:** `docs: final-documentation`
+**Commit:** `feat: make-demo` (Makefile, config packaging) Wed Oct 28, then `docs: final-documentation` (README) Thu Oct 29 (§9, 2026-10-28)
 
 `make demo` must work on a clean clone **with no API key**. It runs the real pipeline on live RSS against a throwaway DB and output dir, set through the existing config env vars (`store.db_path`, `report.output_dir`):
 
@@ -838,7 +837,7 @@ echo "report in $$tmp/reports"
 
 `report` ingests, scores and writes the report in one call (T4.3). It needs network (RSS feeds, and the model download on first run) but no API key, and never touches `data/newsmood.db` or `reports/`. This replaces the undesigned `report --input` (§9, 2026-10-23). A live demo on an empty DB is a thin day: expect a "Data notes" line and a declined cluster block.
 
-**Wheel smoke test.** Build the wheel, install it in a fresh venv, `cd /tmp`, run `newsmood --help`. If `config/default.yaml` is resolved relative to the working directory, it won't ship: package it and load it with `importlib.resources`.
+**Wheel smoke test.** Build the wheel, install it in a fresh venv, `cd /tmp`, run `newsmood --help`. The config ships as package data at `src/newsmood/default.yaml` and is loaded with `importlib.resources`, so it resolves from any working directory (§9, 2026-10-28).
 
 **This is the single highest-leverage thing in the repo.** Most portfolio projects cannot be run by the person evaluating them. Yours can, in under two minutes, with no signup.
 
@@ -985,3 +984,5 @@ Append whenever reality differs. Date, task ID, what changed, why.
 | 2026-10-26 | T4.4 | CI installs CPU-only torch from `download.pytorch.org/whl/cpu` before `pip install -e .` | torch is a core dependency; from PyPI the Linux wheel pulls several GB of CUDA libraries the CPU runner can't use |
 | 2026-10-26 | T4.4 | `docs/week*_summary.md` gitignored | Personal notes, not project docs. The rest of `docs/` stays tracked |
 | 2026-10-27 | T3.4 | Six error examples in docs/drift.md instead of the guide's five | One per off-diagonal confusion cell, so every error type the model makes has an example |
+| 2026-10-28 | T4.5 | Config moved from `config/default.yaml` to `src/newsmood/default.yaml`, shipped as package data and loaded with `importlib.resources` | `config.py` found it at the repo root (`Path(__file__).parents[2]`), which doesn't exist in an installed wheel |
+| 2026-10-28 | T4.5 | Split across two commits: `feat: make-demo` today (Makefile, config packaging), `docs: final-documentation` Thu Oct 29 with the README | The README is scheduled with T2.6 on Thu (2026-10-23 schedule); the Makefile and config packaging are done and testable now |
