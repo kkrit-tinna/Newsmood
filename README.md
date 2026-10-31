@@ -16,23 +16,6 @@ make demo
 
 Needs network and no API key. The first run downloads the 269 MB model. It runs the real pipeline on live RSS against a temp DB and output folder, then prints where the report is. A fresh DB is a thin day, so expect a data note and possibly no clusters.
 
-## Results
-
-Test split of Financial PhraseBank (`sentences_75agree`), n=518.
-
-| Method | Accuracy | Macro-F1 | Negative recall |
-|---|---|---|---|
-| Majority class (floor) | 62.16% | 25.56% | 0.00% |
-| VADER | 54.05% | 45.83% | 22.22% |
-| TF-IDF + Logistic Regression | 83.59% | 79.97% | 77.78% |
-| **DistilBERT (fine-tuned)** | **92.08%** | **90.19%** | **96.83%** |
-| FinBERT (trained on PhraseBank, reference only) | 95.37% | 94.45% | 98.41% |
-
-FinBERT has probably seen these test sentences in training, so it is neither zero-shot nor a ceiling. Full analysis: [docs/baselines.md](docs/baselines.md).
-
-## The number that matters
-
-On 100 live headlines labeled by hand, accuracy is **59.00%** (Wilson 95% [49.20, 68.13]), against 92.08% on PhraseBank. Positive recall is 25.93%. The reference is one labeler, who agreed with themselves on 70.00% of a 20-headline blind relabel. Treat single labels as noisy. Details: [docs/drift.md](docs/drift.md).
 
 ## Install
 
