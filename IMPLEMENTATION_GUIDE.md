@@ -153,7 +153,7 @@ Both workflows share one `concurrency` group, so only one run touches the DB at 
 | SQLite | The whole corpus is a few MB of text per month. A hosted database would cost more than the API bill and add a credential to leak |
 | RSS via `feedparser` | No key, no quota, no terms-of-service problem, real-time. See §3 Sources for why every API alternative was rejected |
 | Model on HF Hub, not in the wheel | A fine-tuned DistilBERT is ~265 MB. PyPI's per-file limit is 100 MB. Lazy-download to a cache dir on first run |
-| DistilBERT, not FinBERT | FinBERT is already trained on financial sentiment. Using it means there is no fine-tuning to show. FinBERT appears in this project only as a **zero-shot reference ceiling** in T2.3 |
+| DistilBERT, not FinBERT | FinBERT is already trained on financial sentiment. Using it means there is no fine-tuning to show. FinBERT appears in this project only as a **reference row** in T2.3: it was trained on PhraseBank, so it is neither zero-shot nor a ceiling (§9, 2026-09-27) |
 | Claude Haiku 4.5 | Report generation is summarization of text you already classified. Haiku is $1/$5 per MTok; one daily report costs well under a cent. Do not reach for a larger model without a measured reason |
 | GitHub Actions | Free minutes on public repos, the schedule lives in the repo, and the run log is public evidence the thing actually runs |
 | DB on an orphan `data` branch | Runners start empty, `*.db` is gitignored on main, and the Actions cache evicts entries unused for 7 days. A branch holding only `newsmood.db` persists it for free and keeps binary history out of main (§9, 2026-10-23) |
@@ -445,7 +445,7 @@ If val accuracy sits at the majority-class rate after epoch 1, stop and check th
 **Depends on:** T2.2
 **Commit:** `feat: model-comparison`
 
-Same test split, same metrics module. Add one extra row: **`ProsusAI/finbert` zero-shot**, as a reference ceiling. It was pretrained on financial text, so beating it is not expected and not the goal — the goal is showing how close a generic model fine-tuned on 2,400 sentences gets to a domain-pretrained one.
+Same test split, same metrics module. Add one extra row: **`ProsusAI/finbert` (trained on PhraseBank, reference only)**. It was fine-tuned on PhraseBank itself, so it is neither zero-shot nor a fair ceiling: its number is contaminated, and the gap to DistilBERT is not a measure of headroom (§9, 2026-09-27).
 
 Include the confusion matrix in `docs/baselines.md` and write a sentence about which class the model confuses most. On this dataset it is usually negative→neutral, because a headline reporting a loss in flat language reads neutral to a model that has only seen 300 negative examples.
 
@@ -479,7 +479,7 @@ Batched CPU inference, batch size 32, `torch.inference_mode()`. Accepts `--text`
 
 Measure and record in `docs/model_card.md`: throughput in headlines/second, p50 and p95 per-headline latency batched, and single-headline cold latency.
 
-The original plan's "<500 ms per document" target will be met by roughly an order of magnitude, which makes it a weak claim. **Report throughput instead** — "1,000 headlines in ~20 seconds on a 2020 laptop CPU, no GPU" is a real number that a reader can size against their own hardware.
+The original plan's "<500 ms per document" target will be met by roughly an order of magnitude, which makes it a weak claim. **Report throughput instead** — "1,000 headlines in about 6 seconds on an M3 Pro CPU, no GPU" (`docs/model_card.md`) is a real number that a reader can size against their own hardware.
 
 **Done when:** `newsmood score --file data/sample/headlines_200.jsonl --benchmark` prints throughput and latency percentiles.
 
@@ -615,7 +615,7 @@ PRAW against r/stocks and r/investing. Only worth doing if T3.4 came in strong. 
 No separate doc or commit. Written Thu Oct 29 as the README section **"When a run fails"** (T4.5's README):
 
 - Exit codes: 1 = a blocking gate failed (no report written, gate named on stderr); 2 = a rejected request.
-- `reports/quality/{date}.json` is written on every run, pass or fail.
+- `reports/quality/{date}.json` is written on every run that reaches the gates, pass or fail. An exit 2 or a crash before the gates writes none.
 - Backfill a missed day with `newsmood report --offline --date YYYY-MM-DD` (feed gates are `not_applicable` on a past date).
 - Restore the DB from the `data` branch: `git fetch origin data && git show origin/data:newsmood.db > data/newsmood.db`.
 
@@ -841,14 +841,14 @@ echo "report in $$tmp/reports"
 
 **This is the single highest-leverage thing in the repo.** Most portfolio projects cannot be run by the person evaluating them. Yours can, in under two minutes, with no signup.
 
-The README is written Thu Oct 29 with T2.6 (§0.5). README order: one sentence → sample report screenshot → `make demo` → results table with the baseline floor → the drift number from T3.4 → install → how it works → **using the data** → **when a run fails** (T3.7, folded in) → engineering notes. Installation goes near the end; nobody installs before deciding they care.
+The README is written Thu Oct 29 with T2.6 (§0.5). README order: one sentence → link to a committed sample report → `make demo` → results table with the baseline floor → the drift number from T3.4 → install → how it works → **using the data** → **when a run fails** (T3.7, folded in) → engineering notes. Installation goes near the end; nobody installs before deciding they care.
 
 **Using the data** — a short section, three or four lines, no new command:
 
 > Scored headlines and the daily index live in a SQLite file at `data/newsmood.db`.
 >
-> - `headlines` — `id, source, title, url, published_at, label, confidence, scored_at`
-> - `daily_index` — `date, mood_index, n_headlines, n_positive, n_neutral, n_negative, n_low_conf, n_sources`
+> - `headlines` — `id, source, title, title_norm, summary, url, published_at, fetched_at, label, confidence, scored_at`
+> - `daily_index` — `date, mood_index, n_headlines, n_positive, n_neutral, n_negative, mean_confidence, n_low_conf, n_sources, source_counts, terms, model_id, computed_at`
 >
 > ```python
 > pd.read_sql("SELECT * FROM daily_index", sqlite3.connect("data/newsmood.db"))
@@ -987,3 +987,4 @@ Append whenever reality differs. Date, task ID, what changed, why.
 | 2026-10-28 | T4.5 | Config moved from `config/default.yaml` to `src/newsmood/default.yaml`, shipped as package data and loaded with `importlib.resources` | `config.py` found it at the repo root (`Path(__file__).parents[2]`), which doesn't exist in an installed wheel |
 | 2026-10-28 | T4.5 | Split across two commits: `feat: make-demo` today (Makefile, config packaging), `docs: final-documentation` Thu Oct 29 with the README | The README is scheduled with T2.6 on Thu (2026-10-23 schedule); the Makefile and config packaging are done and testable now |
 | 2026-10-31 | post-T4.5 | `newsmood report` scores on CPU by default (`model.device`), not `auto` | torch 2.15.0 MPS aborts on macOS 14.6 with NSInvalidArgumentException `-[MPSNDArray arrayViewWithShape:strides:]: unrecognized selector`; CPU is the backend Actions uses, and was measured at ~165 headlines/s (model card, torch 2.14.0) |
+| 2026-10-31 | T4.5 | README opens with a link to `reports/2026-10-30.md` instead of a screenshot. Engineering notes hold operational notes only, not the §8 list. "Using the data" column lists and T3.7's quality-file line corrected to match the code | A committed report is live evidence and renders on GitHub, and the README was kept skimmable. The guide's column lists predated the schema in `data/store.py`, and `pipeline.py` writes the quality file only on runs that reach the gates |

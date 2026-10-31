@@ -62,8 +62,8 @@ Two tables:
 `headlines` (one row per deduplicated headline, with its label) and `daily_index` (one row per non-empty ET day). 
 The schema in `data/store.py` is the source of truth for columns.
 
-- `model_id` records the repo@revision behind every label and index value.
-  Without it, retraining silently splices two classifiers into one trend line.
+- model_id on daily_index records the repo@revision behind each index value. 
+  headlines doesn’t store it yet, so a retrain can’t be told apart in the labels alone.
 - Dedupe on `title_norm`, not `url`. The same wire story appears at several
   outlets under several URLs.
 - Timestamps are stored UTC via `store._ts` (fixed width). Day ranges are
