@@ -90,12 +90,22 @@ def _require_commit_sha(revision: str) -> str:
 
 CommitSha = Annotated[str, AfterValidator(_require_commit_sha)]
 
+# Here, not in training/finetune.py, so reading settings doesn't import torch.
+DEVICE_CHOICES = ("auto", "cpu", "mps", "cuda")
+
+
+def _require_device_choice(device: str) -> str:
+    if device not in DEVICE_CHOICES:
+        raise ValueError(f"unknown device {device!r}, expected one of {DEVICE_CHOICES}")
+    return device
+
 
 class ModelSettings(BaseModel):
     repo_id: str
     revision: CommitSha
     cache_dir: str
     batch_size: int
+    device: Annotated[str, AfterValidator(_require_device_choice)]
 
 
 class FinbertSettings(BaseModel):

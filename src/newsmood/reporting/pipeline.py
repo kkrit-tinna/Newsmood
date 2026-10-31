@@ -237,7 +237,7 @@ def _ingest(conn, settings: Settings, fetch: feeds.Fetcher, started: datetime) -
 def _load_classifier(settings: Settings) -> scoring.BatchClassifier:
     # Called by score_store only when something is unscored, so a run with
     # nothing new loads no model and downloads nothing.
-    return scoring.load_batch_classifier(settings, scoring.resolve_device("auto"))
+    return scoring.load_batch_classifier(settings, scoring.resolve_device(settings.model.device))
 
 
 def _gate_line(report: gates.GateReport) -> str:

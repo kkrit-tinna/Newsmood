@@ -407,3 +407,32 @@ def test_phrasebank_oov_advice_goes_to_stderr_not_the_report(settings, fake_feed
     assert "consider explain.vectorizer: window" in err
     assert "PhraseBank baseline's vocabulary: 100.0% of this day's words" in text
     assert "explain.vectorizer" not in text and "Themes use TF-IDF fit" not in text
+
+
+@pytest.mark.parametrize("device", ["cpu", "mps", "auto", "cuda"])
+def test_report_classifier_gets_the_configured_device(settings, fake_feeds, classifier, out_dir, monkeypatch, device):
+    # No get_classifier here: this is the production path through _load_classifier,
+    # with only the model load and the torch lookup faked.
+    resolved, loaded = [], []
+    monkeypatch.setattr(pipeline.scoring, "resolve_device", lambda choice: resolved.append(choice) or f"resolved-{choice}")
+    monkeypatch.setattr(pipeline.scoring, "load_batch_classifier", lambda s, d: loaded.append(d) or classifier)
+    settings = settings.model_copy(update={"model": settings.model.model_copy(update={"device": device})})
+
+    pipeline.run_report(settings, fetch=fake_feeds, now=lambda: NOW, out_dir=out_dir)
+
+    assert resolved == [device]
+    assert loaded == [f"resolved-{device}"]
+    assert classifier.seen
+
+
+def test_report_on_cpu_stays_on_cpu_when_mps_is_available(settings, fake_feeds, classifier, out_dir, monkeypatch):
+    import torch
+
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    loaded = []
+    monkeypatch.setattr(pipeline.scoring, "load_batch_classifier", lambda s, d: loaded.append(d) or classifier)
+    settings = settings.model_copy(update={"model": settings.model.model_copy(update={"device": "cpu"})})
+
+    pipeline.run_report(settings, fetch=fake_feeds, now=lambda: NOW, out_dir=out_dir)
+
+    assert loaded == [torch.device("cpu")]

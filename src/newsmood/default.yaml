@@ -115,6 +115,10 @@ model:
   # Headlines per forward pass in `newsmood score` (T2.5). Truncation reuses
   # training.max_length, the cap the model was trained with.
   batch_size: 32
+  # Device for `newsmood report`; `newsmood score` keeps its own --device.
+  # CPU is the default because MPS in some torch/macOS combinations aborts the
+  # process; set NEWSMOOD_MODEL__DEVICE=mps or auto to opt in.
+  device: cpu
 
 finbert:
   # Zero-shot reference ceiling for T2.3, scored on CPU for reproducibility.

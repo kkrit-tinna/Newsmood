@@ -36,7 +36,7 @@ from transformers import (
     get_linear_schedule_with_warmup,
 )
 
-from newsmood.config import Settings, TrainingSettings
+from newsmood.config import DEVICE_CHOICES, Settings, TrainingSettings
 from newsmood.data.phrasebank import LABEL_NAMES, load_splits, verify_splits
 from newsmood.evaluation.metrics import EvalResult, accuracy, evaluate
 from newsmood.training.dataset import SentimentDataset
@@ -60,9 +60,6 @@ def get_device():
         print("   Using CPU")
 
     return device
-
-
-DEVICE_CHOICES = ("auto", "cpu", "mps", "cuda")
 
 
 def resolve_device(choice: str) -> torch.device:

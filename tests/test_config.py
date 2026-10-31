@@ -17,7 +17,15 @@ import newsmood.config as config_module
 import pytest
 from pydantic import ValidationError
 
-from newsmood.config import DatasetSettings, FinbertSettings, ModelSettings, Settings, VaderSettings, YamlConfigSource
+from newsmood.config import (
+    DEVICE_CHOICES,
+    DatasetSettings,
+    FinbertSettings,
+    ModelSettings,
+    Settings,
+    VaderSettings,
+    YamlConfigSource,
+)
 
 _YAML_SHA = "0123456789abcdef0123456789abcdef01234567"
 
@@ -97,7 +105,7 @@ def _write_yaml_config(path: Path) -> None:
                     "early_stopping_min_delta": 0.0,
                     "output_dir": "yaml-output",
                 },
-                "model": {"repo_id": "yaml/model", "revision": _YAML_SHA, "cache_dir": "yaml-cache", "batch_size": 1},
+                "model": {"repo_id": "yaml/model", "revision": _YAML_SHA, "cache_dir": "yaml-cache", "batch_size": 1, "device": "cpu"},
                 "finbert": {"repo_id": "yaml/finbert", "revision": _YAML_SHA, "batch_size": 1},
                 "index": {"timezone": "America/New_York", "low_confidence": 0.6},
                 "lede_bands": {"flat": 5, "mild": 15, "moderate": 35},
@@ -296,6 +304,26 @@ def test_env_override_of_revision_is_validated_too(tmp_path, monkeypatch):
     _point_settings_at_yaml(tmp_path, monkeypatch)
     monkeypatch.setenv("NEWSMOOD_MODEL__REVISION", "main")
     with pytest.raises(ValidationError, match="not a full 40-char commit SHA"):
+        Settings()
+
+
+def test_shipped_model_device_is_cpu(monkeypatch):
+    monkeypatch.delenv("NEWSMOOD_MODEL__DEVICE", raising=False)
+    assert Settings().model.device == "cpu"
+
+
+@pytest.mark.parametrize("device", DEVICE_CHOICES)
+def test_env_can_choose_any_model_device(tmp_path, monkeypatch, device):
+    _point_settings_at_yaml(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEWSMOOD_MODEL__DEVICE", device)
+    assert Settings().model.device == device
+
+
+@pytest.mark.parametrize("device", ["tpu", "MPS", ""])
+def test_env_model_device_outside_choices_is_rejected(tmp_path, monkeypatch, device):
+    _point_settings_at_yaml(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEWSMOOD_MODEL__DEVICE", device)
+    with pytest.raises(ValidationError, match="unknown device"):
         Settings()
 
 
